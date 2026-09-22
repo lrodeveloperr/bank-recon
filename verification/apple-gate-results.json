@@ -1,14 +1,14 @@
 {
   "status": "PASS",
-  "recordedAt": "2026-09-22T13:41:56Z",
+  "recordedAt": "2026-09-22T14:49:30Z",
   "repository": "lrodeveloperr/bank-recon",
-  "branch": "engine-finalize-1-3",
-  "commit": "b9684d19fad9e6a28159d07c3e1e5ebb90cc516b",
-  "tree": "4d781eeb8c34edd2cf8ba2012f33b1fa4746ce8e",
+  "branch": "app-finalize-1-3",
+  "commit": "f47a7c557016372a7c8b4dcee6fc287c1071bf5b",
+  "tree": "8e2813c15a30c4b9492f9b261f2ce8df7a42596b",
   "workflow": {
     "name": "Apple Engine Gate",
-    "runId": 35735060922,
-    "url": "https://github.com/lrodeveloperr/bank-recon/actions/runs/35735060922",
+    "runId": 35742751689,
+    "url": "https://github.com/lrodeveloperr/bank-recon/actions/runs/35742751689",
     "runner": "macos-15-arm64",
     "operatingSystem": "macOS 15",
     "swift": "Apple Swift 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)",
@@ -19,7 +19,7 @@
     "warningsAsErrorsBuild": "PASS",
     "xctest": {
       "status": "PASS",
-      "tests": 30
+      "tests": 41
     },
     "cliFixtureHarness": "PASS",
     "portableReference": {
@@ -33,10 +33,10 @@
     },
     "manifestGate": {
       "status": "PASS",
-      "requirements": 34,
-      "appleTested": 27,
-      "appleCompiled": 2,
-      "plannedReleaseBlockers": 5
+      "requirements": 37,
+      "appleTested": 31,
+      "appleCompiled": 3,
+      "plannedReleaseBlockers": 3
     }
   },
   "scope": "Build, unit/integration tests, CLI fixture replay, portable reference checks, static checks and manifest validation for the recorded commit.",

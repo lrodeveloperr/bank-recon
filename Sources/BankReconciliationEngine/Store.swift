@@ -51,7 +51,7 @@ public struct JobSummary: Hashable, Codable, Sendable {
 }
 
 public actor FileEngineStore {
-    public static let freeRealLockLimit = 2
+    public static let freeRealLockLimit = EntitlementPolicy.freeLockedReconciliationLimit
 
     private let root: URL
     private let jobsRoot: URL
@@ -151,7 +151,8 @@ public actor FileEngineStore {
         jobID: UUID,
         expectedRevision: Int,
         result: ReconciliationResult,
-        evidence: LockedEvidence
+        evidence: LockedEvidence,
+        entitlement: EntitlementTier = .free
     ) throws -> StoredJob {
         try withExclusiveRootLock {
             let anchor = try validatedAnchor()
@@ -168,8 +169,9 @@ public actor FileEngineStore {
             guard !anchor.heads.values.compactMap(\.usageReceiptID).contains(receiptID) else {
                 throw EngineError.integrityFailure("duplicate lock receipt")
             }
-            if !current.isSample, realLockedHeads.count >= Self.freeRealLockLimit {
-                throw EngineError.integrityFailure("free locked-reconciliation allowance exhausted")
+            if !current.isSample,
+               !EntitlementPolicy().permitsLock(existingRealLocks: realLockedHeads.count, tier: entitlement) {
+                throw EngineError.entitlementRequired(.pro)
             }
             let record = StoredJob(
                 job: current.job,
@@ -211,6 +213,96 @@ public actor FileEngineStore {
         try withExclusiveRootLock {
             let anchor = try validatedAnchor()
             return anchor.state.realLockCount
+        }
+    }
+
+    public func exportBackup(createdAt: String) throws -> Data {
+        try validateWholeSecondTimestamp(createdAt)
+        return try withExclusiveRootLock {
+            _ = try validatedAnchor()
+            let directories = try FileManager.default.contentsOfDirectory(
+                at: jobsRoot,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+                options: [.skipsHiddenFiles]
+            ).sorted { $0.lastPathComponent < $1.lastPathComponent }
+            var jobs: [BackupJobHistory] = []
+            for directory in directories {
+                let values = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                guard values.isDirectory == true, values.isSymbolicLink != true,
+                      let id = UUID(uuidString: directory.lastPathComponent) else {
+                    throw EngineError.integrityFailure("invalid job directory during backup")
+                }
+                let revisions = try validatedHistory(id).map(\.record)
+                jobs.append(BackupJobHistory(jobID: id, revisions: revisions))
+            }
+            let payload = EngineBackupPayload(
+                createdAt: createdAt,
+                engineVersion: EvidenceLocker.engineVersion,
+                jobs: jobs
+            )
+            let payloadData = try encoder.encode(payload)
+            let envelope = EngineBackupEnvelope(payload: payload, payloadSHA256: Hashing.sha256(payloadData))
+            let data = try encoder.encode(envelope)
+            guard data.count <= EngineBackupEnvelope.maximumBytes else {
+                throw EngineError.resourceLimit("backup bytes")
+            }
+            return data
+        }
+    }
+
+    @discardableResult
+    public func restoreBackup(_ data: Data) throws -> Int {
+        guard data.count <= EngineBackupEnvelope.maximumBytes else { throw EngineError.resourceLimit("backup bytes") }
+        return try withExclusiveRootLock {
+            let anchor = try validatedAnchor()
+            guard anchor.heads.isEmpty else {
+                throw EngineError.invalidConfiguration("restore requires an empty reconciliation store")
+            }
+            let envelope = try decoder.decode(EngineBackupEnvelope.self, from: data)
+            guard envelope.schemaVersion == EngineBackupEnvelope.schemaVersion else {
+                throw EngineError.integrityFailure("unsupported backup schema")
+            }
+            try validateWholeSecondTimestamp(envelope.payload.createdAt)
+            let payloadData = try encoder.encode(envelope.payload)
+            guard Hashing.sha256(payloadData) == envelope.payloadSHA256 else {
+                throw EngineError.integrityFailure("backup payload digest mismatch")
+            }
+            guard envelope.payload.jobs.count <= EngineBackupEnvelope.maximumJobs else {
+                throw EngineError.resourceLimit("backup jobs")
+            }
+            let heads = try validateBackupJobs(envelope.payload.jobs)
+
+            let token = UUID().uuidString.lowercased()
+            let stagingRoot = root.appendingPathComponent(".restore-stage-\(token)", isDirectory: true)
+            let stagedJobs = stagingRoot.appendingPathComponent("jobs", isDirectory: true)
+            let backupName = ".jobs-before-restore-\(token)"
+            let oldJobs = root.appendingPathComponent(backupName, isDirectory: true)
+            try FileManager.default.createDirectory(at: stagedJobs, withIntermediateDirectories: true)
+            var replaced = false
+            defer {
+                try? FileManager.default.removeItem(at: stagingRoot)
+                if replaced { try? FileManager.default.removeItem(at: oldJobs) }
+            }
+            for history in envelope.payload.jobs.sorted(by: { $0.jobID.uuidString < $1.jobID.uuidString }) {
+                let directory = stagedJobs.appendingPathComponent(history.jobID.uuidString.lowercased(), isDirectory: true)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+                for record in history.revisions.sorted(by: { $0.revision < $1.revision }) {
+                    let bytes = try encoder.encode(record)
+                    let destination = directory.appendingPathComponent(revisionFilename(record.revision))
+                    try bytes.write(to: destination, options: [.atomic, .completeFileProtectionUnlessOpen])
+                }
+            }
+
+            let pending = try beginAnchoredReplacement(anchor, heads: heads)
+            _ = try FileManager.default.replaceItemAt(
+                jobsRoot,
+                withItemAt: stagedJobs,
+                backupItemName: backupName,
+                options: []
+            )
+            replaced = true
+            try finalizeAnchoredMutation(pending)
+            return envelope.payload.jobs.count
         }
     }
 
@@ -352,6 +444,20 @@ public actor FileEngineStore {
         return AnchorContext(state: state, encoded: encoded, heads: context.heads)
     }
 
+    private func beginAnchoredReplacement(_ context: AnchorContext, heads: [String: AnchorHead]) throws -> AnchorContext {
+        var state = context.state
+        guard state.pending == nil else { throw EngineError.integrityFailure("another anchored mutation is pending") }
+        let summary = try anchorSummary(heads)
+        state.pending = PendingAnchorMutation(
+            headsSHA256: summary.headsSHA256,
+            receiptsSHA256: summary.receiptsSHA256,
+            realLockCount: summary.realLockCount
+        )
+        let encoded = try encoder.encode(state)
+        try anchorStore.compareAndSwap(identifier: anchorIdentifier, expected: context.encoded, replacement: encoded)
+        return AnchorContext(state: state, encoded: encoded, heads: context.heads)
+    }
+
     private func finalizeAnchoredMutation(_ context: AnchorContext) throws {
         guard let pending = context.state.pending else { throw EngineError.integrityFailure("anchored mutation is not pending") }
         var state = context.state
@@ -366,6 +472,75 @@ public actor FileEngineStore {
 
     private func snapshotID(for record: StoredJob) throws -> String {
         Hashing.sha256(try encoder.encode(record))
+    }
+
+    private func validateBackupJobs(_ jobs: [BackupJobHistory]) throws -> [String: AnchorHead] {
+        guard Set(jobs.map(\.jobID)).count == jobs.count else {
+            throw EngineError.integrityFailure("backup contains duplicate jobs")
+        }
+        var heads: [String: AnchorHead] = [:]
+        var receiptIDs: Set<String> = []
+        for history in jobs {
+            guard !history.revisions.isEmpty,
+                  history.revisions.count <= EngineBackupEnvelope.maximumRevisionsPerJob else {
+                throw EngineError.resourceLimit("backup job revisions")
+            }
+            var previousID: String?
+            var previousState: StoredJobState?
+            for (offset, record) in history.revisions.enumerated() {
+                guard record.job.id == history.jobID,
+                      record.revision == offset + 1,
+                      record.predecessorSnapshotID == previousID,
+                      previousState != .locked else {
+                    throw EngineError.integrityFailure("backup revision chain is invalid")
+                }
+                switch record.state {
+                case .draft:
+                    guard record.result == nil, record.evidence == nil, record.usageReceiptID == nil else {
+                        throw EngineError.integrityFailure("backup draft contains lock material")
+                    }
+                case .locked:
+                    guard let result = record.result, let evidence = record.evidence,
+                          record.usageReceiptID == "lock-\(evidence.manifestSHA256.prefix(32))" else {
+                        throw EngineError.integrityFailure("backup lock material is incomplete")
+                    }
+                    try EvidenceLocker().verify(evidence, job: record.job, result: result)
+                    guard let receiptID = record.usageReceiptID, receiptIDs.insert(receiptID).inserted else {
+                        throw EngineError.integrityFailure("backup contains duplicate lock receipts")
+                    }
+                }
+                previousID = try snapshotID(for: record)
+                previousState = record.state
+            }
+            guard let latest = history.revisions.last, let snapshotID = previousID else {
+                throw EngineError.integrityFailure("backup job has no latest revision")
+            }
+            heads[history.jobID.uuidString.lowercased()] = AnchorHead(
+                revision: latest.revision,
+                snapshotID: snapshotID,
+                state: latest.state,
+                isSample: latest.isSample,
+                usageReceiptID: latest.usageReceiptID
+            )
+        }
+        return heads
+    }
+
+    private func validateWholeSecondTimestamp(_ value: String) throws {
+        let bytes = Array(value.utf8)
+        guard bytes.count == 20,
+              bytes[4] == 45, bytes[7] == 45, bytes[10] == 84,
+              bytes[13] == 58, bytes[16] == 58, bytes[19] == 90,
+              bytes.enumerated().allSatisfy({ pair in
+                  [4, 7, 10, 13, 16, 19].contains(pair.offset) || (48...57).contains(pair.element)
+              }),
+              let hour = Int(String(decoding: bytes[11..<13], as: UTF8.self)),
+              let minute = Int(String(decoding: bytes[14..<16], as: UTF8.self)),
+              let second = Int(String(decoding: bytes[17..<19], as: UTF8.self)),
+              (0...23).contains(hour), (0...59).contains(minute), (0...59).contains(second) else {
+            throw EngineError.invalidConfiguration("backup timestamp must be whole-second UTC RFC 3339")
+        }
+        _ = try LocalDate(iso8601: String(decoding: bytes[0..<10], as: UTF8.self))
     }
 
     private struct AnchorSummary {

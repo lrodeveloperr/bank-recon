@@ -2,7 +2,7 @@ name: Apple Engine Gate
 
 on:
   push:
-    branches: [main, engine-finalize-1-3]
+    branches: [main, engine-finalize-1-3, app-finalize-1-3]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -27,6 +27,8 @@ jobs:
         run: swift package resolve
       - name: Build with warnings as errors
         run: swift build -Xswiftc -warnings-as-errors
+      - name: Build SwiftUI app shell
+        run: swift build --product bank-reconciliation-app -Xswiftc -warnings-as-errors
       - name: Unit and integration tests
         run: swift test --parallel -Xswiftc -warnings-as-errors
       - name: Plain harness

@@ -19,4 +19,4 @@ The deterministic oracle executes 250,000 draft/update/lock lifecycle events and
 
 ## Long-term gaps
 
-Archive backup/restore, StoreKit refresh, evidence rendering, parser corpus/fuzzing, native-language QA, independent review, user acceptance and hardware performance remain release blockers. Those gaps prevent an engine-lock claim.
+Archive backup/restore and evidence rendering now have Apple-native automated coverage, and the StoreKit 2 adapter compiles on Apple. Signed StoreKit sandbox transactions, parser corpus/fuzzing, native-language QA, independent review, user acceptance and hardware performance remain release blockers. Those gaps prevent an engine-lock claim.

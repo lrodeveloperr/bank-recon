@@ -33,9 +33,9 @@ Every normalized source retains its parser version, replay profile, exact source
 ## Remaining release blockers
 
 - Retained real-bank parser corpus, malformed-input matrix and fuzzing.
-- Signed StoreKit 2 entitlement integration and receipt tests.
-- Production backup/restore and PDF/CSV evidence rendering.
-- Real Keychain integration, multi-process/crash injection, and device performance matrices.
+- Signed StoreKit sandbox purchase, revocation and restore tests. The StoreKit 2 adapter and policy integration are implemented and Apple-compiled.
+- Device/file-provider backup restore and golden visual evidence-export review. Archive integrity, entitlement exclusion, PDF/CSV/JSON rendering and injected recovery are Apple-tested.
+- Multi-process kill-point campaigns and iPhone/iPad/Mac performance matrices. Real Keychain compare-and-swap is Apple-tested.
 - Native review of all five UI languages.
 - Independent code-breaker review of this expanded scope and product-owner acceptance.
 
