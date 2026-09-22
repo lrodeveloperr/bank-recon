@@ -108,29 +108,38 @@ public struct OFXParser: Sendable {
     }
 
     private func decode(_ data: Data) throws -> DecodedOFX {
-        guard let latin = String(data: data, encoding: .isoLatin1),
-              let rootRange = latin.range(of: "<OFX", options: [.caseInsensitive]) else {
+        guard let rootOffset = asciiRootOffset(data),
+              let latinHeader = String(data: data.prefix(rootOffset), encoding: .isoLatin1) else {
             throw EngineError.malformedInput("OFX body is missing")
         }
-        let header = String(latin[..<rootRange.lowerBound])
-        let upperHeader = header.uppercased()
+        let upperHeader = latinHeader.uppercased()
         let encoding: String.Encoding
         if upperHeader.contains("ENCODING:UTF-8") || upperHeader.contains("ENCODING:UTF8") || upperHeader.contains("ENCODING=\"UTF-8\"") {
             encoding = .utf8
-        } else if upperHeader.contains("ENCODING:USASCII") || upperHeader.contains("ENCODING:ASCII") || header.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        } else if upperHeader.contains("ENCODING:USASCII") || upperHeader.contains("ENCODING:ASCII") || latinHeader.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             encoding = .ascii
         } else if upperHeader.contains("ENCODING:1252") || upperHeader.contains("ENCODING:WINDOWS-1252") {
             encoding = .windowsCP1252
         } else {
             throw EngineError.malformedInput("unsupported OFX character encoding")
         }
-        let byteOffset = latin.utf8.distance(from: latin.utf8.startIndex, to: rootRange.lowerBound.samePosition(in: latin.utf8) ?? latin.utf8.startIndex)
-        guard byteOffset >= 0, byteOffset <= data.count,
-              let body = String(data: data.subdata(in: byteOffset..<data.count), encoding: encoding) else {
+        guard let body = String(data: data.subdata(in: rootOffset..<data.count), encoding: encoding) else {
             throw EngineError.malformedInput("OFX text cannot be decoded")
         }
         let xmlVersion = upperHeader.contains("VERSION:2") || upperHeader.contains("OFXSGML=\"2") || body.contains("</STMTTRN>")
         return DecodedOFX(body: body, isXML: xmlVersion)
+    }
+
+    private func asciiRootOffset(_ data: Data) -> Int? {
+        let bytes = [UInt8](data)
+        guard bytes.count >= 4 else { return nil }
+        for index in 0...(bytes.count - 4) where bytes[index] == 0x3C {
+            let o = bytes[index + 1] | 0x20
+            let f = bytes[index + 2] | 0x20
+            let x = bytes[index + 3] | 0x20
+            if o == 0x6F, f == 0x66, x == 0x78 { return index }
+        }
+        return nil
     }
 
     private func parseSGML(_ text: String) throws -> BoundedXMLNode {
