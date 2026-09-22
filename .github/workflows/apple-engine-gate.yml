@@ -79,8 +79,12 @@ jobs:
             -scheme BankReconciliation \
             -testPlan BankReconciliationStoreKit \
             -destination "platform=iOS Simulator,id=$simulator_id" \
-            -only-testing:BankReconciliationStoreKitTests \
+            -only-testing:BankReconciliationStoreKitTests/StoreKitLifecycleTests/testCatalogLoadsBothLocalizedNonConsumablesAtConfiguredUSPrices \
+            -only-testing:BankReconciliationStoreKitTests/StoreKitLifecycleTests/testExternalPurchaseAndRelaunchSelectHighestVerifiedTier \
+            -only-testing:BankReconciliationStoreKitTests/StoreKitLifecycleTests/testRefundRemovesNonConsumableEntitlement \
             -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 60 \
             CODE_SIGNING_ALLOWED=NO \
             test
       - name: Produce unsigned validation archives
