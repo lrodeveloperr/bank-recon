@@ -111,9 +111,8 @@ final class BackupEntitlementReportTests: XCTestCase {
             try? FileManager.default.removeItem(at: targetRoot)
         }
         let source = try FileEngineStore(root: root, anchorIdentifier: UUID().uuidString, anchorStore: BackupTestAnchorStore())
-        var object = try XCTUnwrap(JSONSerialization.jsonObject(
-            with: try await source.exportBackup(createdAt: "2026-09-22T12:00:00Z")
-        ) as? [String: Any])
+        let backup = try await source.exportBackup(createdAt: "2026-09-22T12:00:00Z")
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: backup) as? [String: Any])
         var payload = try XCTUnwrap(object["payload"] as? [String: Any])
         payload["engineVersion"] = "tampered"
         object["payload"] = payload
