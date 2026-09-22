@@ -78,6 +78,8 @@ jobs:
           xcodebuild -project BankReconciliation.xcodeproj \
             -scheme BankReconciliation \
             -destination "platform=iOS Simulator,id=$simulator_id" \
+            -only-testing:BankReconciliationStoreKitTests \
+            -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
             test
       - name: Produce unsigned validation archives
