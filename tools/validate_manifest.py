@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VALID = {"implemented-source-uncompiled", "portable-tested", "planned-release-blocker"}
+VALID = {"apple-compiled", "apple-tested", "portable-tested", "planned-release-blocker"}
 
 
 def main() -> None:
@@ -18,7 +18,8 @@ def main() -> None:
     report = {
         "status": "PASS",
         "requirements": len(ids),
-        "implemented_source_uncompiled": sum(item["status"] == "implemented-source-uncompiled" for item in data["requirements"]),
+        "apple_compiled": sum(item["status"] == "apple-compiled" for item in data["requirements"]),
+        "apple_tested": sum(item["status"] == "apple-tested" for item in data["requirements"]),
         "portable_tested": sum(item["status"] == "portable-tested" for item in data["requirements"]),
         "planned_release_blockers": sum(item["status"] == "planned-release-blocker" for item in data["requirements"]),
     }

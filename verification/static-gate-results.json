@@ -1,9 +1,10 @@
 {
   "checks": {
     "append_only_revision_chain": true,
+    "bounded_structured_parsing": true,
+    "controlled_advanced_matching": true,
     "crlf_byte_tokenizer": true,
     "evidence_replays_source_bytes": true,
-    "explicit_unsupported_adapter_gate": true,
     "external_durable_anchor": true,
     "mode_c_replay_balances": true,
     "mode_c_residual_total": true,
@@ -13,6 +14,7 @@
     "no_try_force": true,
     "recoverable_two_phase_anchor": true,
     "release_status_blocked": true,
+    "required_adapter_routing": true,
     "structured_match_keys": true
   },
   "failures": [],

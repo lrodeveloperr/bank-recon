@@ -4,7 +4,7 @@ This checkpoint was reconstructed from the durable locked product specification 
 
 Consequently:
 
-- the only current portable claims are regenerated from the scripts in this package;
-- Apple compile/test claims remain absent;
+- portable claims are regenerated from the scripts in this package;
+- Apple compile/test claims are limited to the recorded workflow run in `verification/apple-gate-results.json`;
 - previous audit findings are treated as design inputs, not as closed evidence;
-- missing adapters and platform integrations are explicit release blockers.
+- required import adapters are now implemented and fixture-tested, while parser-corpus hardening and platform integrations remain explicit release blockers.

@@ -1,7 +1,8 @@
 {
-  "implemented_source_uncompiled": 18,
-  "planned_release_blockers": 12,
-  "portable_tested": 3,
-  "requirements": 33,
+  "apple_compiled": 2,
+  "apple_tested": 27,
+  "planned_release_blockers": 5,
+  "portable_tested": 0,
+  "requirements": 34,
   "status": "PASS"
 }

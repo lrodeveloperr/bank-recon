@@ -47,8 +47,8 @@ public struct LockedEvidence: Hashable, Codable, Sendable {
 }
 
 public struct EvidenceLocker: Sendable {
-    public static let schemaVersion = 2
-    public static let engineVersion = "0.2.0-recovery"
+    public static let schemaVersion = 3
+    public static let engineVersion = "0.3.0"
 
     public init() {}
 
