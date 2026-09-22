@@ -1,0 +1,38 @@
+name: Apple Engine Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift-package:
+    name: Swift 6 / macOS 15
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Resolve package
+        run: swift package resolve
+      - name: Build with warnings as errors
+        run: swift build -Xswiftc -warnings-as-errors
+      - name: Unit and integration tests
+        run: swift test --parallel -Xswiftc -warnings-as-errors
+      - name: Plain harness
+        run: swift run bank-reconcile verify-fixtures
+      - name: Portable reference gates
+        run: |
+          python3 tools/reference_oracle.py
+          python3 tools/static_checks.py
+          python3 tools/validate_manifest.py
