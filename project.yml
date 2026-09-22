@@ -1,0 +1,150 @@
+name: BankReconciliation
+
+options:
+  bundleIdPrefix: com.worksbienstudios
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+  xcodeVersion: "16.0"
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    VERSIONING_SYSTEM: apple-generic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  BankReconciliationEngine:
+    type: framework
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Sources/BankReconciliationEngine
+        excludes:
+          - Resources
+      - path: Sources/BankReconciliationEngine/Resources
+        buildPhase: resources
+    dependencies:
+      - framework: StoreKit.framework
+      - framework: Security.framework
+      - sdk: libcompression.tbd
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.worksbienstudios.bankreconciliation.engine
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+
+  BankReconciliationAppCore:
+    type: framework
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Sources/BankReconciliationAppCore
+    dependencies:
+      - target: BankReconciliationEngine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.worksbienstudios.bankreconciliation.app-core
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+
+  BankReconciliation:
+    type: application
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Sources/BankReconciliationApp
+      - path: App/Assets.xcassets
+        buildPhase: resources
+      - path: App/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: App/StoreKit/BankReconciliation.storekit
+        buildPhase: none
+    dependencies:
+      - target: BankReconciliationAppCore
+    info:
+      path: App/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.worksbienstudios.bankreconciliation
+        PRODUCT_NAME: Bank Reconciliation
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": App/BankReconciliation-macOS.entitlements
+
+  BankReconciliationEngineTests:
+    type: bundle.unit-test
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Tests/BankReconciliationEngineTests
+    dependencies:
+      - target: BankReconciliationEngine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.worksbienstudios.bankreconciliation.engine-tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+
+  BankReconciliationAppCoreTests:
+    type: bundle.unit-test
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Tests/BankReconciliationAppCoreTests
+    dependencies:
+      - target: BankReconciliationAppCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.worksbienstudios.bankreconciliation.app-core-tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+
+  BankReconciliationStoreKitTests:
+    type: bundle.unit-test
+    platform: auto
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: Tests/BankReconciliationStoreKitTests
+      - path: App/StoreKit/BankReconciliation.storekit
+        buildPhase: resources
+    dependencies:
+      - target: BankReconciliation
+      - target: BankReconciliationEngine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.worksbienstudios.bankreconciliation.storekit-tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        "TEST_HOST[sdk=macosx*]": "$(BUILT_PRODUCTS_DIR)/Bank Reconciliation.app/Contents/MacOS/Bank Reconciliation"
+        "TEST_HOST[sdk=iphonesimulator*]": "$(BUILT_PRODUCTS_DIR)/Bank Reconciliation.app/Bank Reconciliation"
+
+schemes:
+  BankReconciliation:
+    build:
+      targets:
+        BankReconciliation: all
+        BankReconciliationEngine: [test]
+        BankReconciliationAppCore: [test]
+        BankReconciliationEngineTests: [test]
+        BankReconciliationAppCoreTests: [test]
+        BankReconciliationStoreKitTests: [test]
+    run:
+      config: Debug
+      storeKitConfiguration: App/StoreKit/BankReconciliation.storekit
+    test:
+      config: Debug
+      gatherCoverageData: true
+      macroExpansion: BankReconciliation
+      testPlans:
+        - path: BankReconciliationStoreKit.xctestplan
+          defaultPlan: true
+    archive:
+      config: Release

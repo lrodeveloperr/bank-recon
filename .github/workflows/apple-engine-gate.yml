@@ -2,7 +2,7 @@ name: Apple Engine Gate
 
 on:
   push:
-    branches: [main, engine-finalize-1-3, app-finalize-1-3]
+    branches: [main, engine-finalize-1-3, app-finalize-1-3, apple-ship-1-3]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -38,3 +38,70 @@ jobs:
           python3 tools/reference_oracle.py
           python3 tools/static_checks.py
           python3 tools/validate_manifest.py
+
+  universal-apple-app:
+    name: Universal app / iOS + iPadOS + macOS
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate icon and Xcode project
+        run: tools/generate_apple_project.sh
+      - name: Validate submission metadata
+        run: |
+          plutil -lint App/Info.plist
+          plutil -lint App/PrivacyInfo.xcprivacy
+          plutil -lint App/BankReconciliation-macOS.entitlements
+          python3 -m json.tool App/StoreKit/BankReconciliation.storekit >/dev/null
+          xcodebuild -project BankReconciliation.xcodeproj -list
+      - name: Build iPhone and iPad app
+        run: >-
+          xcodebuild -project BankReconciliation.xcodeproj
+          -scheme BankReconciliation
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+          build
+      - name: Build Mac app
+        run: >-
+          xcodebuild -project BankReconciliation.xcodeproj
+          -scheme BankReconciliation
+          -destination 'generic/platform=macOS'
+          CODE_SIGNING_ALLOWED=NO
+          SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+          build
+      - name: Validate StoreKit contract and compile lifecycle suite
+        run: |
+          python3 tools/validate_storekit_catalog.py
+          xcodebuild -project BankReconciliation.xcodeproj \
+            -scheme BankReconciliation \
+            -testPlan BankReconciliationStoreKit \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build-for-testing
+      - name: Produce unsigned validation archives
+        run: |
+          mkdir -p build-artifacts
+          xcodebuild -project BankReconciliation.xcodeproj \
+            -scheme BankReconciliation \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build-artifacts/BankReconciliation-iOS.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+          xcodebuild -project BankReconciliation.xcodeproj \
+            -scheme BankReconciliation \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$PWD/build-artifacts/BankReconciliation-macOS.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+      - name: Package generated Apple deliverables
+        run: |
+          zip -qry build-artifacts/BankReconciliation-xcodeproj.zip BankReconciliation.xcodeproj BankReconciliationStoreKit.xctestplan
+          ditto -c -k --sequesterRsrc --keepParent App/Assets.xcassets build-artifacts/BankReconciliation-assets.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bank-reconciliation-apple-validation
+          path: build-artifacts
+          retention-days: 14

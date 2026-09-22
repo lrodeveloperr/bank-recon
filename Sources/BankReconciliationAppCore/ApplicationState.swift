@@ -38,13 +38,26 @@ public struct SourceProfile: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+public struct WatchedBatchFolder: Codable, Sendable, Hashable, Identifiable {
+    public let id: UUID
+    public var name: String
+    public var bookmarkData: Data
+
+    public init(id: UUID = UUID(), name: String, bookmarkData: Data) {
+        self.id = id
+        self.name = name
+        self.bookmarkData = bookmarkData
+    }
+}
+
 public struct PersistedApplicationState: Codable, Sendable, Equatable {
-    public static let schemaVersion = 2
+    public static let schemaVersion = 3
 
     public let schemaVersion: Int
     public var workspaces: [ReconciliationWorkspace]
     public var selectedWorkspaceID: UUID
     public var sourceProfiles: [SourceProfile]
+    public var watchedBatchFolders: [WatchedBatchFolder]
     public var importedAtBySourceID: [String: String]
     public var workspaceIDByJobID: [String: UUID]
     public var preferredDateOrder: DateOrder
@@ -54,6 +67,7 @@ public struct PersistedApplicationState: Codable, Sendable, Equatable {
         workspaces: [ReconciliationWorkspace],
         selectedWorkspaceID: UUID,
         sourceProfiles: [SourceProfile] = [],
+        watchedBatchFolders: [WatchedBatchFolder] = [],
         importedAtBySourceID: [String: String] = [:],
         workspaceIDByJobID: [String: UUID] = [:],
         preferredDateOrder: DateOrder = .ymd,
@@ -63,6 +77,7 @@ public struct PersistedApplicationState: Codable, Sendable, Equatable {
         self.workspaces = workspaces
         self.selectedWorkspaceID = selectedWorkspaceID
         self.sourceProfiles = sourceProfiles
+        self.watchedBatchFolders = watchedBatchFolders
         self.importedAtBySourceID = importedAtBySourceID
         self.workspaceIDByJobID = workspaceIDByJobID
         self.preferredDateOrder = preferredDateOrder
@@ -84,13 +99,39 @@ public struct PersistedApplicationState: Codable, Sendable, Equatable {
               Set(workspaces.map(\.id)).count == workspaces.count,
               workspaces.contains(where: { $0.id == selectedWorkspaceID }),
               Set(sourceProfiles.map(\.id)).count == sourceProfiles.count,
+              Set(watchedBatchFolders.map(\.id)).count == watchedBatchFolders.count,
               workspaceIDByJobID.keys.allSatisfy({ UUID(uuidString: $0) != nil && $0 == $0.lowercased() }),
               workspaceIDByJobID.values.allSatisfy({ id in workspaces.contains(where: { $0.id == id }) }),
               workspaces.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
-              sourceProfiles.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+              sourceProfiles.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+              watchedBatchFolders.allSatisfy({
+                  !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !$0.bookmarkData.isEmpty
+              }) else {
             throw EngineError.integrityFailure("application state is invalid")
         }
         _ = try CurrencyCode(preferredCurrency)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, workspaces, selectedWorkspaceID, sourceProfiles, watchedBatchFolders
+        case importedAtBySourceID, workspaceIDByJobID, preferredDateOrder, preferredCurrency
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let storedSchema = try container.decode(Int.self, forKey: .schemaVersion)
+        guard storedSchema == 2 || storedSchema == Self.schemaVersion else {
+            throw EngineError.integrityFailure("unsupported application state schema")
+        }
+        self.schemaVersion = Self.schemaVersion
+        self.workspaces = try container.decode([ReconciliationWorkspace].self, forKey: .workspaces)
+        self.selectedWorkspaceID = try container.decode(UUID.self, forKey: .selectedWorkspaceID)
+        self.sourceProfiles = try container.decodeIfPresent([SourceProfile].self, forKey: .sourceProfiles) ?? []
+        self.watchedBatchFolders = try container.decodeIfPresent([WatchedBatchFolder].self, forKey: .watchedBatchFolders) ?? []
+        self.importedAtBySourceID = try container.decodeIfPresent([String: String].self, forKey: .importedAtBySourceID) ?? [:]
+        self.workspaceIDByJobID = try container.decodeIfPresent([String: UUID].self, forKey: .workspaceIDByJobID) ?? [:]
+        self.preferredDateOrder = try container.decodeIfPresent(DateOrder.self, forKey: .preferredDateOrder) ?? .ymd
+        self.preferredCurrency = try container.decodeIfPresent(String.self, forKey: .preferredCurrency) ?? "USD"
     }
 }
 
