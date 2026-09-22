@@ -66,7 +66,7 @@ public struct BAI2Parser: Sendable {
                 let accountCurrency = try CurrencyCode(nonempty(accountHeader.fields[2]) ?? groupCurrency.value)
                 guard accountCurrency == groupCurrency else { throw EngineError.malformedInput("BAI2 account currency differs from group currency") }
                 let summaries = try summaryAmounts(accountHeader.fields, currency: accountCurrency)
-                var accountControl = try summaries.reduce(.zero) { try $0.adding($1.amount) }
+                var accountControl = try summaries.reduce(ExactAmount.zero) { try $0.adding($1.amount) }
                 for summary in summaries where summary.code == "010" || summary.code == "015" {
                     balances.append(StatementBalance(
                         kind: summary.code == "010" ? .opening : .closing,
