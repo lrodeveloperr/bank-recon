@@ -30,11 +30,13 @@ All records must be within the selected inclusive period. Accounts and currencie
 
 CSV, TSV, XLSX, OFX, QFX, QBO, QIF, QMTF, CAMT.053 001.02–001.08, CAMT.054 001.02–001.08, MT940 and BAI2.
 
-Only CSV/TSV is implemented in this checkpoint. Unsupported adapters return a typed error and cannot be locked.
+All required families are implemented with replay-bound profiles, bounded parsers and format-specific validation. Unsupported or malformed variants return typed errors and cannot be locked.
 
 ## Monetization boundary
 
 Failed parses and previews never consume free usage. Only a successfully committed non-sample lock creates an immutable receipt. Restoring data cannot create an App Store entitlement.
+
+Free permits one entity, one saved mapping and two committed real locks. Pro is a non-consumable purchase for one entity with unlimited mappings, locks and evidence packs. Accountant is a non-consumable purchase that additionally permits multiple entities and branded evidence headers. Live access is derived from verified, non-revoked StoreKit transactions; backup data contains no entitlement state.
 
 ## Release rule
 

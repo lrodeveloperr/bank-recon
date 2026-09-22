@@ -55,7 +55,7 @@ public struct EvidenceReportRenderer: Sendable {
         for source in record.job.sources.sorted(by: { $0.file.filename < $1.file.filename }) {
             lines.append("\(source.role.rawValue): \(source.file.filename)")
             lines.append("  source \(source.file.sourceID); \(source.file.byteCount) bytes; SHA-256 \(source.file.sha256)")
-            lines.append("  parser \(source.replay.parserVersion); imported \(importedAtBySourceID[source.file.sourceID] ?? "not recorded")")
+            lines.append("  \(mappingDescription(source.replay)); imported \(importedAtBySourceID[source.file.sourceID] ?? "not recorded")")
         }
         lines += ["", "TOTALS"]
         for total in result.totals {
@@ -100,10 +100,16 @@ public struct EvidenceReportRenderer: Sendable {
     ) -> Data {
         var rows: [[String]] = [["section", "type", "account", "currency", "left", "right", "difference", "details"]]
         rows.append(["summary", result.state.rawValue, "", "", "", "", "", entity])
+        rows.append(["metadata", "job", "", "", "", "", "", record.job.id.uuidString.lowercased()])
+        rows.append(["metadata", "mode", "", "", "", "", "", record.job.mode.rawValue])
+        rows.append(["metadata", "period", "", "", "", "", "", "\(record.job.period.start) to \(record.job.period.end)"])
+        rows.append(["metadata", "lockedAt", "", "", "", "", "", record.evidence?.lockedAt ?? "missing"])
+        rows.append(["metadata", "engineVersion", "", "", "", "", "", EvidenceLocker.engineVersion])
+        rows.append(["metadata", "limitation", "", "", "", "", "", "Supplied files and recorded decisions only; not bank, accounting, tax, legal or audit assurance."])
         for source in record.job.sources.sorted(by: { $0.file.filename < $1.file.filename }) {
             rows.append([
                 "source", source.role.rawValue, "", "", "", "", "",
-                "\(source.file.filename) | \(source.file.sha256) | \(source.file.byteCount) bytes | \(source.replay.parserVersion) | \(importedAtBySourceID[source.file.sourceID] ?? "not recorded")"
+                "\(source.file.filename) | \(source.file.sha256) | \(source.file.byteCount) bytes | \(mappingDescription(source.replay)) | \(importedAtBySourceID[source.file.sourceID] ?? "not recorded")"
             ])
         }
         for total in result.totals {
@@ -122,12 +128,35 @@ public struct EvidenceReportRenderer: Sendable {
                 exception.rightLocators.joined(separator: " | "), "", exception.detail
             ])
         }
+        for decision in record.job.decisions.sorted(by: { $0.exceptionKey < $1.exceptionKey }) {
+            rows.append([
+                "decision", decision.approved ? "approved" : "unresolved", "", "", "", "", "",
+                "\(decision.exceptionKey) | \(decision.explanation)"
+            ])
+        }
         let text = rows.map { $0.map(Self.csvField).joined(separator: ",") }.joined(separator: "\r\n") + "\r\n"
         return Data(text.utf8)
     }
 
     private static func csvField(_ value: String) -> String {
         "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+
+    private func mappingDescription(_ replay: ParseReplayDescriptor) -> String {
+        var parts = ["format \(replay.format.rawValue)", "parser \(replay.parserVersion)"]
+        if let mapping = replay.delimitedMapping {
+            parts.append("date[\(mapping.dateColumn)] amount[\(mapping.amountColumn)]")
+            parts.append("account[\(mapping.accountColumn.map { String($0) } ?? "default")] currency[\(mapping.currencyColumn.map { String($0) } ?? "default")]")
+            parts.append("dateOrder \(mapping.dateOrder.rawValue) decimal \(mapping.decimalSeparator)")
+        }
+        if let worksheet = replay.selectedWorksheet { parts.append("worksheet \(worksheet)") }
+        if let profile = replay.structuredProfile {
+            parts.append("dateOrder \(profile.dateOrder.rawValue) decimal \(profile.decimalSeparator)")
+            if let account = profile.defaultAccount { parts.append("defaultAccount \(account)") }
+            if let currency = profile.defaultCurrency { parts.append("defaultCurrency \(currency)") }
+        }
+        if !replay.balanceOverrides.isEmpty { parts.append("balanceOverrides \(replay.balanceOverrides.count)") }
+        return parts.joined(separator: "; ")
     }
 }
 

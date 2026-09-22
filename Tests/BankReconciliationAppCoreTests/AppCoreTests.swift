@@ -59,4 +59,13 @@ final class AppCoreTests: XCTestCase {
         XCTAssertFalse(policy.permitsBrandedEvidence(tier: .pro))
         XCTAssertTrue(policy.permitsBrandedEvidence(tier: .accountant))
     }
+
+    func testApplicationStateRequiresValidEntityBindings() throws {
+        var state = PersistedApplicationState.initial()
+        let jobID = UUID().uuidString.lowercased()
+        state.workspaceIDByJobID[jobID] = state.selectedWorkspaceID
+        XCTAssertNoThrow(try state.validate())
+        state.workspaceIDByJobID[jobID] = UUID()
+        XCTAssertThrowsError(try state.validate())
+    }
 }

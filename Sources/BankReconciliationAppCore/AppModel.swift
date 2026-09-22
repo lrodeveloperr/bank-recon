@@ -17,6 +17,7 @@ public struct ImportedWorkflowSource: Sendable, Identifiable {
 
 public struct ReconciliationWorkflow: Sendable, Identifiable {
     public let id: UUID
+    public let workspaceID: UUID
     public var mode: ReconciliationMode
     public var period: ReconciliationPeriod
     public var sources: [ImportedWorkflowSource]
@@ -26,6 +27,7 @@ public struct ReconciliationWorkflow: Sendable, Identifiable {
 
     public init(
         id: UUID = UUID(),
+        workspaceID: UUID,
         mode: ReconciliationMode,
         period: ReconciliationPeriod,
         sources: [ImportedWorkflowSource] = [],
@@ -34,6 +36,7 @@ public struct ReconciliationWorkflow: Sendable, Identifiable {
         isBuiltInSample: Bool = false
     ) {
         self.id = id
+        self.workspaceID = workspaceID
         self.mode = mode
         self.period = period
         self.sources = sources
@@ -108,7 +111,14 @@ public final class BankReconciliationAppModel: ObservableObject {
     }
 
     public func beginWorkflow(mode: ReconciliationMode, start: LocalDate, end: LocalDate) throws {
-        workflow = ReconciliationWorkflow(mode: mode, period: try ReconciliationPeriod(start: start, end: end))
+        guard let workspaceID = applicationState.selectedWorkspace?.id else {
+            throw EngineError.integrityFailure("selected workspace is missing")
+        }
+        workflow = ReconciliationWorkflow(
+            workspaceID: workspaceID,
+            mode: mode,
+            period: try ReconciliationPeriod(start: start, end: end)
+        )
     }
 
     public func clearWorkflow() { workflow = nil }
@@ -131,6 +141,7 @@ public final class BankReconciliationAppModel: ObservableObject {
             }
             self.workflow = ReconciliationWorkflow(
                 id: sample.job.id,
+                workspaceID: self.applicationState.selectedWorkspaceID,
                 mode: sample.job.mode,
                 period: sample.job.period,
                 sources: imports,
@@ -138,6 +149,10 @@ public final class BankReconciliationAppModel: ObservableObject {
                 result: sample.result,
                 isBuiltInSample: true
             )
+            var candidate = self.applicationState
+            candidate.workspaceIDByJobID[sample.job.id.uuidString.lowercased()] = candidate.selectedWorkspaceID
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
         }
     }
 
@@ -171,8 +186,10 @@ public final class BankReconciliationAppModel: ObservableObject {
             current.sources.sort { $0.statement.role.rawValue < $1.statement.role.rawValue }
             current.result = nil
             self.workflow = current
-            self.applicationState.importedAtBySourceID[statement.file.sourceID] = timestamp
-            try await self.stateRepository.save(self.applicationState)
+            var candidate = self.applicationState
+            candidate.importedAtBySourceID[statement.file.sourceID] = timestamp
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
         }
     }
 
@@ -200,6 +217,10 @@ public final class BankReconciliationAppModel: ObservableObject {
             current.storedRevision = stored.revision
             current.result = result
             self.workflow = current
+            var candidate = self.applicationState
+            candidate.workspaceIDByJobID[current.id.uuidString.lowercased()] = current.workspaceID
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
             try await self.reloadRecords()
         }
     }
@@ -281,35 +302,58 @@ public final class BankReconciliationAppModel: ObservableObject {
 
     public func addWorkspace(named name: String) async {
         await perform {
+            let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { throw EngineError.invalidConfiguration("entity name is required") }
             self.entitlement = await self.entitlementProvider.refresh()
             guard EntitlementPolicy().permitsWorkspace(
                 existingWorkspaceCount: self.applicationState.workspaces.count,
                 tier: self.entitlement.tier
             ) else { throw EngineError.entitlementRequired(.accountant) }
-            let workspace = ReconciliationWorkspace(name: name)
-            self.applicationState.workspaces.append(workspace)
-            self.applicationState.selectedWorkspaceID = workspace.id
-            try await self.stateRepository.save(self.applicationState)
+            let workspace = ReconciliationWorkspace(name: normalized)
+            var candidate = self.applicationState
+            candidate.workspaces.append(workspace)
+            candidate.selectedWorkspaceID = workspace.id
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
+        }
+    }
+
+    public func selectWorkspace(_ id: UUID) async {
+        await perform {
+            guard self.applicationState.workspaces.contains(where: { $0.id == id }) else {
+                throw EngineError.notFound("entity")
+            }
+            var candidate = self.applicationState
+            candidate.selectedWorkspaceID = id
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
         }
     }
 
     public func updateSelectedWorkspace(name: String, brandedHeader: String?) async {
         await perform {
-            guard let index = self.applicationState.workspaces.firstIndex(where: { $0.id == self.applicationState.selectedWorkspaceID }) else {
+            let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { throw EngineError.invalidConfiguration("entity name is required") }
+            var candidate = self.applicationState
+            guard let index = candidate.workspaces.firstIndex(where: { $0.id == candidate.selectedWorkspaceID }) else {
                 throw EngineError.integrityFailure("selected workspace is missing")
             }
             if let brandedHeader, !brandedHeader.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                !EntitlementPolicy().permitsBrandedEvidence(tier: self.entitlement.tier) {
                 throw EngineError.entitlementRequired(.accountant)
             }
-            self.applicationState.workspaces[index].name = name
-            self.applicationState.workspaces[index].brandedEvidenceHeader = brandedHeader
-            try await self.stateRepository.save(self.applicationState)
+            candidate.workspaces[index].name = normalized
+            candidate.workspaces[index].brandedEvidenceHeader = brandedHeader?.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
         }
     }
 
     public func saveSourceProfile(_ profile: SourceProfile) async {
         await perform {
+            guard !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw EngineError.invalidConfiguration("source profile name is required")
+            }
             self.entitlement = await self.entitlementProvider.refresh()
             let existing = self.applicationState.sourceProfiles.firstIndex { $0.id == profile.id }
             if existing == nil,
@@ -317,14 +361,19 @@ public final class BankReconciliationAppModel: ObservableObject {
                     existingProfileCount: self.applicationState.sourceProfiles.count,
                     tier: self.entitlement.tier
                ) { throw EngineError.entitlementRequired(.pro) }
-            if let existing { self.applicationState.sourceProfiles[existing] = profile }
-            else { self.applicationState.sourceProfiles.append(profile) }
-            try await self.stateRepository.save(self.applicationState)
+            var candidate = self.applicationState
+            if let existing { candidate.sourceProfiles[existing] = profile }
+            else { candidate.sourceProfiles.append(profile) }
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
         }
     }
 
     public func evidenceReport(for record: StoredJob) throws -> EvidenceReportPack {
-        let workspace = applicationState.selectedWorkspace ?? ReconciliationWorkspace(name: "My entity")
+        guard let workspaceID = applicationState.workspaceIDByJobID[record.job.id.uuidString.lowercased()],
+              let workspace = applicationState.workspaces.first(where: { $0.id == workspaceID }) else {
+            throw EngineError.integrityFailure("reconciliation entity binding is missing")
+        }
         return try EvidenceReportRenderer().render(
             record: record,
             entityName: workspace.name,
@@ -332,6 +381,11 @@ public final class BankReconciliationAppModel: ObservableObject {
             brandedHeader: workspace.brandedEvidenceHeader,
             entitlement: entitlement.tier
         )
+    }
+
+    public func workspaceName(for jobID: UUID) -> String {
+        guard let workspaceID = applicationState.workspaceIDByJobID[jobID.uuidString.lowercased()] else { return "Unassigned" }
+        return applicationState.workspaces.first(where: { $0.id == workspaceID })?.name ?? "Unassigned"
     }
 
     public func makeBackup() async throws -> Data {

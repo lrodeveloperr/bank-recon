@@ -169,7 +169,11 @@ final class BackupEntitlementReportTests: XCTestCase {
             importedAtBySourceID: Dictionary(uniqueKeysWithValues: bundle.job.sources.map { ($0.file.sourceID, "2026-09-22T11:59:00Z") })
         )
         XCTAssertTrue(String(decoding: pack.pdf.prefix(8), as: UTF8.self).hasPrefix("%PDF-1.4"))
-        XCTAssertTrue(String(decoding: pack.csv, as: UTF8.self).contains("Acme Ltd"))
+        let csv = String(decoding: pack.csv, as: UTF8.self)
+        XCTAssertTrue(csv.contains("Acme Ltd"))
+        XCTAssertTrue(csv.contains("date[0] amount[1]"))
+        XCTAssertTrue(csv.contains("engineVersion"))
+        XCTAssertTrue(csv.contains("not bank, accounting, tax, legal or audit assurance"))
         XCTAssertEqual(pack.json, record.evidence?.canonicalManifest)
 
         XCTAssertThrowsError(try EvidenceReportRenderer().render(

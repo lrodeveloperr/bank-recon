@@ -39,13 +39,14 @@ public struct SourceProfile: Codable, Sendable, Hashable, Identifiable {
 }
 
 public struct PersistedApplicationState: Codable, Sendable, Equatable {
-    public static let schemaVersion = 1
+    public static let schemaVersion = 2
 
     public let schemaVersion: Int
     public var workspaces: [ReconciliationWorkspace]
     public var selectedWorkspaceID: UUID
     public var sourceProfiles: [SourceProfile]
     public var importedAtBySourceID: [String: String]
+    public var workspaceIDByJobID: [String: UUID]
     public var preferredDateOrder: DateOrder
     public var preferredCurrency: String
 
@@ -54,6 +55,7 @@ public struct PersistedApplicationState: Codable, Sendable, Equatable {
         selectedWorkspaceID: UUID,
         sourceProfiles: [SourceProfile] = [],
         importedAtBySourceID: [String: String] = [:],
+        workspaceIDByJobID: [String: UUID] = [:],
         preferredDateOrder: DateOrder = .ymd,
         preferredCurrency: String = "USD"
     ) {
@@ -62,6 +64,7 @@ public struct PersistedApplicationState: Codable, Sendable, Equatable {
         self.selectedWorkspaceID = selectedWorkspaceID
         self.sourceProfiles = sourceProfiles
         self.importedAtBySourceID = importedAtBySourceID
+        self.workspaceIDByJobID = workspaceIDByJobID
         self.preferredDateOrder = preferredDateOrder
         self.preferredCurrency = preferredCurrency
     }
@@ -81,6 +84,8 @@ public struct PersistedApplicationState: Codable, Sendable, Equatable {
               Set(workspaces.map(\.id)).count == workspaces.count,
               workspaces.contains(where: { $0.id == selectedWorkspaceID }),
               Set(sourceProfiles.map(\.id)).count == sourceProfiles.count,
+              workspaceIDByJobID.keys.allSatisfy({ UUID(uuidString: $0) != nil && $0 == $0.lowercased() }),
+              workspaceIDByJobID.values.allSatisfy({ id in workspaces.contains(where: { $0.id == id }) }),
               workspaces.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
               sourceProfiles.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
             throw EngineError.integrityFailure("application state is invalid")

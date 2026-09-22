@@ -155,6 +155,27 @@ private struct ReconciliationsView: View {
                     .buttonStyle(.borderedProminent)
                 }
             }
+            if model.entitlement.tier == .accountant {
+                Section("Review queue") {
+                    let actionable = model.records.filter {
+                        $0.state == .draft || $0.result?.state == .differenceFound || $0.result?.state == .cannotConclude
+                    }
+                    if actionable.isEmpty {
+                        Text("No reconciliations need review").foregroundStyle(.secondary)
+                    }
+                    ForEach(actionable, id: \.job.id) { record in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(model.workspaceName(for: record.job.id)).font(.headline)
+                                Text("\(record.job.mode.displayName) · \(record.job.period.end)")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(record.result?.state.displayName ?? "Draft")
+                        }
+                    }
+                }
+            }
             Section("Saved") {
                 if model.records.isEmpty {
                     Text("No reconciliations yet").foregroundStyle(.secondary)
@@ -167,6 +188,9 @@ private struct ReconciliationsView: View {
                             Text(record.result?.state.displayName ?? "Not previewed")
                         }
                         Text("\(record.job.mode.displayName) · \(record.job.period.start) – \(record.job.period.end)")
+                            .foregroundStyle(.secondary)
+                        Text(model.workspaceName(for: record.job.id))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(record.job.id.uuidString.lowercased())
                             .font(.caption.monospaced())
@@ -486,7 +510,7 @@ private struct SettingsView: View {
             Section("Plan") {
                 LabeledContent("Current", value: model.entitlement.tier.displayName)
                 Text(planSummary).foregroundStyle(.secondary)
-                ForEach(model.products) { product in
+                ForEach(model.products.filter { $0.tier > model.entitlement.tier }) { product in
                     Button("Buy \(product.displayName) — \(product.displayPrice)") {
                         Task { await model.purchase(product.tier) }
                     }
@@ -495,6 +519,13 @@ private struct SettingsView: View {
             }
 
             Section("Entity") {
+                if model.applicationState.workspaces.count > 1 {
+                    Picker("Selected entity", selection: workspaceSelection) {
+                        ForEach(model.applicationState.workspaces) { workspace in
+                            Text(workspace.name).tag(workspace.id)
+                        }
+                    }
+                }
                 TextField("Entity name", text: $entityName)
                 TextField("Branded report header (Accountant)", text: $brandedHeader)
                 Button("Save Entity") {
@@ -541,8 +572,15 @@ private struct SettingsView: View {
         switch model.entitlement.tier {
         case .free: "One entity, one saved mapping and two locked reconciliations. Previews do not count."
         case .pro: "One entity with unlimited mappings, reconciliations and evidence packs."
-        case .accountant: "Unlimited entities plus branded evidence headers and batch-ready capacity."
+        case .accountant: "Unlimited entities, mappings and evidence packs, plus branded evidence headers."
         }
+    }
+
+    private var workspaceSelection: Binding<UUID> {
+        Binding(
+            get: { model.applicationState.selectedWorkspaceID },
+            set: { id in Task { await model.selectWorkspace(id) } }
+        )
     }
 
     private func populateEntityFields() {
