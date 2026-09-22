@@ -115,12 +115,16 @@ targets:
       - path: App/StoreKit/BankReconciliation.storekit
         buildPhase: resources
     dependencies:
+      - target: BankReconciliation
       - target: BankReconciliationEngine
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.worksbienstudios.bankreconciliation.storekit-tests
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        "TEST_HOST[sdk=macosx*]": "$(BUILT_PRODUCTS_DIR)/Bank Reconciliation.app/Contents/MacOS/Bank Reconciliation"
+        "TEST_HOST[sdk=iphonesimulator*]": "$(BUILT_PRODUCTS_DIR)/Bank Reconciliation.app/Bank Reconciliation"
 
 schemes:
   BankReconciliation:
@@ -138,7 +142,7 @@ schemes:
     test:
       config: Debug
       gatherCoverageData: true
-      storeKitConfiguration: App/StoreKit/BankReconciliation.storekit
+      macroExpansion: BankReconciliation
       targets:
         - name: BankReconciliationEngineTests
         - name: BankReconciliationAppCoreTests
