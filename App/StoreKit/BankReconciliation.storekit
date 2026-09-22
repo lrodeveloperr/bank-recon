@@ -1,5 +1,5 @@
 {
-  "identifier" : "A4E23D6C-CE54-470E-8F08-E6E8C92130C2",
+  "identifier" : "A4E23D6C",
   "nonRenewingSubscriptions" : [
 
   ],
@@ -7,7 +7,7 @@
     {
       "displayPrice" : "39.99",
       "familyShareable" : false,
-      "internalID" : "2D13C6D4-A05C-4ECB-A014-6A483FA7A59A",
+      "internalID" : "2D13C6D4",
       "localizations" : [
         { "description" : "Unlimited reconciliations and saved mappings for one entity.", "displayName" : "Pro", "locale" : "en_US" },
         { "description" : "Rapprochements et modèles enregistrés illimités pour une entité.", "displayName" : "Pro", "locale" : "fr_FR" },
@@ -22,7 +22,7 @@
     {
       "displayPrice" : "99.99",
       "familyShareable" : false,
-      "internalID" : "E0EC39F1-778E-42CE-87A6-E5C74A311900",
+      "internalID" : "E0EC39F1",
       "localizations" : [
         { "description" : "Unlimited entities, batch folders, review queue, and branded evidence.", "displayName" : "Accountant", "locale" : "en_US" },
         { "description" : "Entités illimitées, dossiers par lots, file de révision et rapports personnalisés.", "displayName" : "Comptable", "locale" : "fr_FR" },
@@ -36,21 +36,12 @@
     }
   ],
   "settings" : {
-    "_applicationInternalID" : "0000000000",
-    "_developerTeamID" : "",
-    "_failTransactionsEnabled" : false,
-    "_locale" : "en_US",
-    "_storefront" : "USA",
-    "_storeKitErrors" : [
-
-    ]
   },
   "subscriptionGroups" : [
 
   ],
   "version" : {
-    "major" : 3,
+    "major" : 2,
     "minor" : 0
   }
 }
-
