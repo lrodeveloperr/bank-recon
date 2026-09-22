@@ -1,0 +1,47 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-09-22T13:41:56Z",
+  "repository": "lrodeveloperr/bank-recon",
+  "branch": "engine-finalize-1-3",
+  "commit": "b9684d19fad9e6a28159d07c3e1e5ebb90cc516b",
+  "tree": "4d781eeb8c34edd2cf8ba2012f33b1fa4746ce8e",
+  "workflow": {
+    "name": "Apple Engine Gate",
+    "runId": 35735060922,
+    "url": "https://github.com/lrodeveloperr/bank-recon/actions/runs/35735060922",
+    "runner": "macos-15-arm64",
+    "operatingSystem": "macOS 15",
+    "swift": "Apple Swift 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)",
+    "target": "arm64-apple-macosx15.0"
+  },
+  "results": {
+    "packageResolve": "PASS",
+    "warningsAsErrorsBuild": "PASS",
+    "xctest": {
+      "status": "PASS",
+      "tests": 30
+    },
+    "cliFixtureHarness": "PASS",
+    "portableReference": {
+      "status": "PASS",
+      "checks": 550002,
+      "seed": 739996
+    },
+    "staticGate": {
+      "status": "PASS",
+      "checks": 16
+    },
+    "manifestGate": {
+      "status": "PASS",
+      "requirements": 34,
+      "appleTested": 27,
+      "appleCompiled": 2,
+      "plannedReleaseBlockers": 5
+    }
+  },
+  "scope": "Build, unit/integration tests, CLI fixture replay, portable reference checks, static checks and manifest validation for the recorded commit.",
+  "limitations": [
+    "This is a hosted macOS package gate, not the iPhone/iPad/Mac device performance matrix.",
+    "It does not replace retained real-bank parser corpus testing, parser fuzzing, signed StoreKit tests, native-language QA, independent review or product-owner acceptance."
+  ]
+}
