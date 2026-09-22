@@ -15,13 +15,13 @@ This repository contains the deterministic local-first Swift engine and shared S
 - An adaptive SwiftUI workflow for Mac, iPad and iPhone covering imports, previews, a synchronized two-column review, a persistent exception inspector, explanations, locks, evidence packs and settings.
 - A complete source-profile editor and Accountant batch-folder workflow with deterministic `_bank`/`_ledger`, `_old`/`_new` and `_statement` pairing.
 - StoreKit 2 non-consumable Pro and Accountant entitlements, dynamic App Store pricing, fresh verification and purchase restoration.
-- A local StoreKit configuration with five product localizations, automated catalogue/direct-purchase/refund CI tests, and additional Ask to Buy and interrupted-purchase Xcode scenarios.
+- A fail-closed local StoreKit catalogue with five product localizations and an app-hosted Xcode suite for purchase/relaunch, refund, Ask to Buy and interrupted-purchase scenarios.
 - A two-lock free allowance enforced only when a non-sample reconciliation is successfully committed.
 - Bounded digest-verified local backup/restore that deliberately excludes App Store entitlement state.
 - PDF, CSV and canonical JSON evidence exports with source proof, parser mappings, totals, exceptions, decisions and limitations.
 - A portable Python reference oracle and static gate runnable without Xcode.
 - A generated universal Xcode project for iOS 18, iPadOS 18 and macOS 15 with a privacy manifest, complete app-icon catalog, Mac sandbox entitlements and unsigned archive validation.
-- A GitHub-hosted Apple gate that builds the package and all three Apple destinations, runs 46 package tests plus three deterministic StoreKit catalogue/direct-purchase/refund tests, produces unsigned validation archives, runs the CLI fixture harness and runs the portable gates.
+- A GitHub-hosted Apple gate that builds the package and all three Apple destinations, runs 46 package tests, validates the exact StoreKit product contract, and compiles the app-hosted StoreKit lifecycle suite, produces unsigned validation archives, runs the CLI fixture harness and runs the portable gates.
 
 ## Deliberate release blockers
 
