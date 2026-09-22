@@ -1,0 +1,12 @@
+{
+  "checks": 550002,
+  "components": {
+    "amount": 200001,
+    "canonicalization": 50000,
+    "lifecycle": 250001,
+    "matching": 50000
+  },
+  "scope": "portable reference invariants only; not a Swift compile or Apple platform gate",
+  "seed": 739996,
+  "status": "PASS"
+}

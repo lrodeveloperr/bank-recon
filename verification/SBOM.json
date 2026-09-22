@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "package": "BankReconciliationEngine",
+  "version": "0.2.0-recovery",
+  "externalPackageDependencies": [],
+  "appleFrameworks": ["Foundation", "CryptoKit", "Darwin", "Security"],
+  "networkRuntimeDependencies": [],
+  "buildStatus": "SOURCE_ONLY_UNCOMPILED"
+}

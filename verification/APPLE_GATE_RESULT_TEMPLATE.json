@@ -1,0 +1,14 @@
+{
+  "status": "NOT_RUN",
+  "requiredHost": "Current macOS with current Xcode and Swift 6",
+  "commands": [
+    "swift test",
+    "swift run bank-reconcile verify-fixtures"
+  ],
+  "deviceMatrix": [
+    "oldest supported iPhone",
+    "oldest supported iPad",
+    "supported Mac baseline"
+  ],
+  "results": []
+}

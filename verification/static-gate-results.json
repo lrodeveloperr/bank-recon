@@ -1,0 +1,21 @@
+{
+  "checks": {
+    "append_only_revision_chain": true,
+    "crlf_byte_tokenizer": true,
+    "evidence_replays_source_bytes": true,
+    "explicit_unsupported_adapter_gate": true,
+    "external_durable_anchor": true,
+    "mode_c_replay_balances": true,
+    "mode_c_residual_total": true,
+    "no_binary_floating_money": true,
+    "no_network_stack": true,
+    "no_trap_calls": true,
+    "no_try_force": true,
+    "recoverable_two_phase_anchor": true,
+    "release_status_blocked": true,
+    "structured_match_keys": true
+  },
+  "failures": [],
+  "scope": "source/static checks; not compiler execution",
+  "status": "PASS"
+}
