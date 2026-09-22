@@ -61,6 +61,7 @@ public final class BankReconciliationAppModel: ObservableObject {
     @Published public private(set) var products: [StoreProductDescriptor] = []
     @Published public private(set) var summaries: [JobSummary] = []
     @Published public private(set) var records: [StoredJob] = []
+    @Published public private(set) var batchFolderScans: [UUID: BatchFolderScanResult] = [:]
     @Published public private(set) var workflow: ReconciliationWorkflow?
     @Published public private(set) var isBusy = false
     @Published public var message: String?
@@ -70,19 +71,22 @@ public final class BankReconciliationAppModel: ObservableObject {
     private let entitlementProvider: any EntitlementProviding
     private let router: FormatRouter
     private let planner: ImportPlanner
+    private let batchFolderScanner: BatchFolderScanner
 
     public init(
         store: FileEngineStore,
         stateRepository: ApplicationStateRepository,
         entitlementProvider: any EntitlementProviding,
         router: FormatRouter = FormatRouter(),
-        planner: ImportPlanner = ImportPlanner()
+        planner: ImportPlanner = ImportPlanner(),
+        batchFolderScanner: BatchFolderScanner = BatchFolderScanner()
     ) {
         self.store = store
         self.stateRepository = stateRepository
         self.entitlementProvider = entitlementProvider
         self.router = router
         self.planner = planner
+        self.batchFolderScanner = batchFolderScanner
     }
 
     public static func live() throws -> BankReconciliationAppModel {
@@ -366,6 +370,142 @@ public final class BankReconciliationAppModel: ObservableObject {
             else { candidate.sourceProfiles.append(profile) }
             try await self.stateRepository.save(candidate)
             self.applicationState = candidate
+        }
+    }
+
+    public func deleteSourceProfile(_ id: UUID) async {
+        await perform {
+            var candidate = self.applicationState
+            guard candidate.sourceProfiles.contains(where: { $0.id == id }) else {
+                throw EngineError.notFound("source profile")
+            }
+            candidate.sourceProfiles.removeAll { $0.id == id }
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
+        }
+    }
+
+    public func addWatchedBatchFolder(_ url: URL) async {
+        await perform {
+            self.entitlement = await self.entitlementProvider.refresh()
+            guard self.entitlement.tier == .accountant else { throw EngineError.entitlementRequired(.accountant) }
+            let granted = BatchFolderAccess.startAccessing(url)
+            defer { BatchFolderAccess.stopAccessing(url, whenGranted: granted) }
+            let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard values.isDirectory == true, values.isSymbolicLink != true else {
+                throw EngineError.invalidConfiguration("choose a folder that is not a symbolic link")
+            }
+            let folder = WatchedBatchFolder(
+                name: url.lastPathComponent,
+                bookmarkData: try BatchFolderAccess.makeBookmark(for: url)
+            )
+            var candidate = self.applicationState
+            candidate.watchedBatchFolders.append(folder)
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
+            self.batchFolderScans[folder.id] = try self.batchFolderScanner.scan(url)
+        }
+    }
+
+    public func removeWatchedBatchFolder(_ id: UUID) async {
+        await perform {
+            var candidate = self.applicationState
+            guard candidate.watchedBatchFolders.contains(where: { $0.id == id }) else {
+                throw EngineError.notFound("batch folder")
+            }
+            candidate.watchedBatchFolders.removeAll { $0.id == id }
+            try await self.stateRepository.save(candidate)
+            self.applicationState = candidate
+            self.batchFolderScans[id] = nil
+        }
+    }
+
+    public func scanWatchedBatchFolder(_ id: UUID) async {
+        await perform {
+            self.entitlement = await self.entitlementProvider.refresh()
+            guard self.entitlement.tier == .accountant else { throw EngineError.entitlementRequired(.accountant) }
+            guard let folder = self.applicationState.watchedBatchFolders.first(where: { $0.id == id }) else {
+                throw EngineError.notFound("batch folder")
+            }
+            let url = try BatchFolderAccess.resolve(folder)
+            let granted = BatchFolderAccess.startAccessing(url)
+            defer { BatchFolderAccess.stopAccessing(url, whenGranted: granted) }
+            self.batchFolderScans[id] = try self.batchFolderScanner.scan(url)
+        }
+    }
+
+    public func importBatchCandidate(
+        folderID: UUID,
+        candidate batch: BatchCandidate,
+        start: LocalDate,
+        end: LocalDate
+    ) async {
+        await perform {
+            self.entitlement = await self.entitlementProvider.refresh()
+            guard self.entitlement.tier == .accountant else { throw EngineError.entitlementRequired(.accountant) }
+            guard let folder = self.applicationState.watchedBatchFolders.first(where: { $0.id == folderID }) else {
+                throw EngineError.notFound("batch folder")
+            }
+            let period = try ReconciliationPeriod(start: start, end: end)
+            let folderURL = try BatchFolderAccess.resolve(folder)
+            let granted = BatchFolderAccess.startAccessing(folderURL)
+            defer { BatchFolderAccess.stopAccessing(folderURL, whenGranted: granted) }
+
+            var imports: [ImportedWorkflowSource] = []
+            var importedAtBySourceID = self.applicationState.importedAtBySourceID
+            for role in batch.filenamesByRole.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+                guard let filename = batch.filenamesByRole[role] else { continue }
+                let fileURL = try BatchFolderAccess.fileURL(named: filename, in: folderURL)
+                let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true else {
+                    throw EngineError.invalidConfiguration("batch source must be a regular file: \(filename)")
+                }
+                let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+                let replay = try self.planner.replayDescriptor(
+                    data: data,
+                    filename: filename,
+                    defaultDateOrder: self.applicationState.preferredDateOrder,
+                    defaultCurrency: self.applicationState.preferredCurrency
+                )
+                let router = self.router
+                let statement = try await Task.detached {
+                    try router.parse(data: data, filename: filename, role: role, period: period, replay: replay)
+                }.value
+                let timestamp = Self.timestamp()
+                imports.append(ImportedWorkflowSource(statement: statement, bytes: data, importedAt: timestamp))
+                importedAtBySourceID[statement.file.sourceID] = timestamp
+            }
+            let requiredRoles: Set<SourceRole>
+            switch batch.mode {
+            case .bankVsLedger: requiredRoles = [.bank, .ledger]
+            case .exportVsExport: requiredRoles = [.olderExport, .newerExport]
+            case .singleStatement: requiredRoles = [.statement]
+            }
+            guard Set(imports.map(\.statement.role)) == requiredRoles else {
+                throw EngineError.integrityFailure("batch candidate is missing a required role")
+            }
+            let job = ReconciliationJob(
+                mode: batch.mode,
+                period: period,
+                sources: imports.map(\.statement)
+            )
+            let result = try await Task.detached { try ReconciliationEngine().run(job) }.value
+            let stored = try await self.store.createDraft(job)
+            self.workflow = ReconciliationWorkflow(
+                id: job.id,
+                workspaceID: self.applicationState.selectedWorkspaceID,
+                mode: batch.mode,
+                period: period,
+                sources: imports,
+                storedRevision: stored.revision,
+                result: result
+            )
+            var state = self.applicationState
+            state.importedAtBySourceID = importedAtBySourceID
+            state.workspaceIDByJobID[job.id.uuidString.lowercased()] = state.selectedWorkspaceID
+            try await self.stateRepository.save(state)
+            self.applicationState = state
+            try await self.reloadRecords()
         }
     }
 

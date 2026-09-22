@@ -1,0 +1,56 @@
+{
+  "identifier" : "A4E23D6C-CE54-470E-8F08-E6E8C92130C2",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "39.99",
+      "familyShareable" : false,
+      "internalID" : "2D13C6D4-A05C-4ECB-A014-6A483FA7A59A",
+      "localizations" : [
+        { "description" : "Unlimited reconciliations and saved mappings for one entity.", "displayName" : "Pro", "locale" : "en_US" },
+        { "description" : "Rapprochements et modèles enregistrés illimités pour une entité.", "displayName" : "Pro", "locale" : "fr_FR" },
+        { "description" : "Conciliaciones y asignaciones guardadas ilimitadas para una entidad.", "displayName" : "Pro", "locale" : "es_ES" },
+        { "description" : "Unbegrenzte Abstimmungen und gespeicherte Zuordnungen für eine Einheit.", "displayName" : "Pro", "locale" : "de_DE" },
+        { "description" : "Conciliações e mapeamentos salvos ilimitados para uma entidade.", "displayName" : "Pro", "locale" : "pt_BR" }
+      ],
+      "productID" : "com.worksbienstudios.bankreconciliation.pro",
+      "referenceName" : "Bank Reconciliation Pro",
+      "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "99.99",
+      "familyShareable" : false,
+      "internalID" : "E0EC39F1-778E-42CE-87A6-E5C74A311900",
+      "localizations" : [
+        { "description" : "Unlimited entities, batch folders, review queue, and branded evidence.", "displayName" : "Accountant", "locale" : "en_US" },
+        { "description" : "Entités illimitées, dossiers par lots, file de révision et rapports personnalisés.", "displayName" : "Comptable", "locale" : "fr_FR" },
+        { "description" : "Entidades ilimitadas, carpetas por lotes, cola de revisión e informes personalizados.", "displayName" : "Contable", "locale" : "es_ES" },
+        { "description" : "Unbegrenzte Mandanten, Stapelordner, Prüfliste und gebrandete Nachweise.", "displayName" : "Buchhaltung", "locale" : "de_DE" },
+        { "description" : "Entidades ilimitadas, pastas em lote, fila de revisão e relatórios personalizados.", "displayName" : "Contador", "locale" : "pt_BR" }
+      ],
+      "productID" : "com.worksbienstudios.bankreconciliation.accountant",
+      "referenceName" : "Bank Reconciliation Accountant",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0000000000",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
+

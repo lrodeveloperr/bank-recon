@@ -136,6 +136,7 @@ private enum AppSection: String, CaseIterable, Identifiable {
 private struct ReconciliationsView: View {
     @ObservedObject var model: BankReconciliationAppModel
     @State private var showingWorkflow = false
+    @State private var showingBatchFolders = false
 
     var body: some View {
         List {
@@ -202,16 +203,32 @@ private struct ReconciliationsView: View {
         }
         .navigationTitle("Reconciliations")
         .toolbar {
-            Button {
-                Task {
-                    await model.loadBuiltInSample()
-                    showingWorkflow = true
+            ToolbarItemGroup {
+                if model.entitlement.tier == .accountant {
+                    Button { showingBatchFolders = true } label: {
+                        Label("Batch Folders", systemImage: "folder.badge.gearshape")
+                    }
                 }
-            } label: { Label("Open Sample", systemImage: "sparkles") }
+                Button {
+                    Task {
+                        await model.loadBuiltInSample()
+                        showingWorkflow = true
+                    }
+                } label: { Label("Open Sample", systemImage: "sparkles") }
+            }
         }
         .sheet(isPresented: $showingWorkflow) {
             NavigationStack { WorkflowView(model: model) }
                 .frame(minWidth: 620, minHeight: 620)
+        }
+        .sheet(isPresented: $showingBatchFolders) {
+            NavigationStack {
+                BatchFoldersView(model: model) {
+                    showingBatchFolders = false
+                    showingWorkflow = true
+                }
+            }
+            .frame(minWidth: 720, minHeight: 620)
         }
     }
 }
@@ -289,16 +306,7 @@ private struct WorkflowView: View {
 
                 if let result = workflow.result {
                     ResultSummaryView(result: result)
-                    if !result.exceptions.isEmpty {
-                        GroupBox("Exceptions and explanations") {
-                            VStack(alignment: .leading, spacing: 14) {
-                                ForEach(result.exceptions, id: \.self) { exception in
-                                    ExceptionDecisionView(model: model, exception: exception, disabled: workflow.isBuiltInSample)
-                                    if exception != result.exceptions.last { Divider() }
-                                }
-                            }.padding(.vertical, 6)
-                        }
-                    }
+                    ReviewWorkspaceView(model: model, workflow: workflow, result: result)
                 }
             }
             .padding()
@@ -361,7 +369,7 @@ private struct ResultSummaryView: View {
     }
 }
 
-private struct ExceptionDecisionView: View {
+struct ExceptionDecisionView: View {
     @ObservedObject var model: BankReconciliationAppModel
     let exception: ReconciliationException
     let disabled: Bool
@@ -388,7 +396,7 @@ private struct ExceptionDecisionView: View {
 
 private struct SourceProfilesView: View {
     @ObservedObject var model: BankReconciliationAppModel
-    @State private var name = "CSV profile"
+    @State private var editingDraft: SourceProfileDraft?
 
     var body: some View {
         List {
@@ -397,32 +405,45 @@ private struct SourceProfilesView: View {
                     Text("No saved source profiles").foregroundStyle(.secondary)
                 }
                 ForEach(model.applicationState.sourceProfiles) { profile in
-                    VStack(alignment: .leading) {
-                        Text(profile.name).font(.headline)
-                        Text(profile.format.rawValue.uppercased()).foregroundStyle(.secondary)
+                    Button {
+                        editingDraft = SourceProfileDraft(profile: profile)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(profile.name).font(.headline)
+                                Text(profile.format.rawValue.uppercased()).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions {
+                        Button("Delete", role: .destructive) {
+                            Task { await model.deleteSourceProfile(profile.id) }
+                        }
                     }
                 }
             }
-            Section("Add an inferred CSV profile") {
-                TextField("Profile name", text: $name)
-                Button("Save Profile") { saveProfile() }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Section("Mappings") {
+                Button {
+                    editingDraft = SourceProfileDraft(
+                        name: "",
+                        dateOrder: model.applicationState.preferredDateOrder,
+                        defaultCurrency: model.applicationState.preferredCurrency
+                    )
+                } label: {
+                    Label("New Source Profile", systemImage: "plus")
+                }
                 Text(model.entitlement.tier == .free ? "Free includes one saved mapping." : "Your purchase includes unlimited saved mappings.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .navigationTitle("Source Profiles")
-    }
-
-    private func saveProfile() {
-        let mapping = DelimitedMapping(
-            delimiter: ",", hasHeader: true, dateColumn: 0, amountColumn: 1,
-            dateOrder: model.applicationState.preferredDateOrder,
-            decimalSeparator: ".",
-            defaultAccount: "Primary", defaultCurrency: model.applicationState.preferredCurrency
-        )
-        let profile = SourceProfile(name: name, format: .csv, delimitedMapping: mapping)
-        Task { await model.saveSourceProfile(profile) }
+        .sheet(item: $editingDraft) { draft in
+            NavigationStack { SourceProfileEditorView(model: model, initialDraft: draft) }
+                .frame(minWidth: 560, minHeight: 700)
+        }
     }
 }
 
@@ -615,7 +636,7 @@ private extension String {
     }
 }
 
-private extension ReconciliationMode {
+extension ReconciliationMode {
     static let allUICases: [Self] = [.bankVsLedger, .exportVsExport, .singleStatement]
     var displayName: String {
         switch self {
@@ -626,7 +647,7 @@ private extension ReconciliationMode {
     }
 }
 
-private extension SourceRole {
+extension SourceRole {
     var displayName: String {
         switch self {
         case .bank: "Bank export"
@@ -638,7 +659,7 @@ private extension SourceRole {
     }
 }
 
-private extension ResultState {
+extension ResultState {
     var displayName: String {
         switch self {
         case .reconciled: "Reconciled"
@@ -656,7 +677,7 @@ private extension ResultState {
     }
 }
 
-private extension ExceptionKind {
+extension ExceptionKind {
     var displayName: String {
         rawValue.reduce(into: "") { output, character in
             if character.isUppercase { output.append(" ") }
@@ -665,7 +686,7 @@ private extension ExceptionKind {
     }
 }
 
-private extension EntitlementTier {
+extension EntitlementTier {
     var displayName: String {
         switch self {
         case .free: "Free"
