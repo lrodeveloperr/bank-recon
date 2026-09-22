@@ -220,9 +220,9 @@ public final class BankReconciliationAppModel: ObservableObject {
                 mode: current.mode,
                 period: current.period,
                 sources: current.sources.map(\.statement),
+                matchingPolicy: existing.job.matchingPolicy,
                 manualMatches: existing.job.manualMatches,
-                decisions: decisions,
-                matchingPolicy: existing.job.matchingPolicy
+                decisions: decisions
             )
             let result = try await Task.detached { try ReconciliationEngine().run(job) }.value
             let stored = try await self.store.updateDraft(job, expectedRevision: revision)

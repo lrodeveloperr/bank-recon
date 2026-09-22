@@ -50,12 +50,17 @@ public struct ImportPlanner: Sendable {
         )
         switch detected {
         case .csv, .tsv:
-            let mapping = profile?.delimitedMapping ?? (try inferredDelimitedMapping(
-                data: data,
-                format: detected,
-                dateOrder: defaultDateOrder,
-                defaultCurrency: defaultCurrency
-            ))
+            let mapping: DelimitedMapping
+            if let saved = profile?.delimitedMapping {
+                mapping = saved
+            } else {
+                mapping = try inferredDelimitedMapping(
+                    data: data,
+                    format: detected,
+                    dateOrder: defaultDateOrder,
+                    defaultCurrency: defaultCurrency
+                )
+            }
             return ParseReplayDescriptor(format: detected, parserVersion: DelimitedParser.version, delimitedMapping: mapping)
         case .xlsx:
             let sheets = try XLSXParser().worksheetNames(data: data)
