@@ -227,10 +227,21 @@ public struct EvidenceLocker: Sendable {
     }
 
     private func jobObject(_ job: ReconciliationJob) -> [String: Any] {
-        [
+        let policy = job.matchingPolicy ?? .default
+        return [
             "id": job.id.uuidString.lowercased(),
             "mode": job.mode.rawValue,
             "period": periodObject(job.period),
+            "matchingPolicy": [
+                "fuzzyMatchingEnabled": policy.fuzzyMatchingEnabled,
+                "maximumDateDistanceDays": policy.maximumDateDistanceDays,
+                "minimumTextSimilarityPermille": policy.minimumTextSimilarityPermille,
+                "maximumFuzzyCandidatePairs": policy.maximumFuzzyCandidatePairs,
+                "maximumComparedTextScalars": policy.maximumComparedTextScalars,
+                "splitMergeCandidatesEnabled": policy.splitMergeCandidatesEnabled,
+                "maximumSplitMergeGroupSize": policy.maximumSplitMergeGroupSize,
+                "maximumSplitMergeEvaluations": policy.maximumSplitMergeEvaluations
+            ],
             "sources": job.sources.sorted { ($0.role.rawValue, $0.file.sourceID) < ($1.role.rawValue, $1.file.sourceID) }.map(sourceObject),
             "manualMatches": job.manualMatches.sorted { ($0.leftLocator, $0.rightLocator) < ($1.leftLocator, $1.rightLocator) }.map {
                 [
@@ -275,10 +286,23 @@ public struct EvidenceLocker: Sendable {
     }
 
     private func replayObject(_ replay: ParseReplayDescriptor) -> [String: Any] {
+        let structuredProfile: Any
+        if let profile = replay.structuredProfile {
+            structuredProfile = [
+                "dateOrder": profile.dateOrder.rawValue,
+                "decimalSeparator": profile.decimalSeparator,
+                "groupingSeparator": jsonValue(profile.groupingSeparator),
+                "defaultAccount": jsonValue(profile.defaultAccount),
+                "defaultCurrency": jsonValue(profile.defaultCurrency)
+            ] as [String: Any]
+        } else {
+            structuredProfile = NSNull()
+        }
         var output: [String: Any] = [
             "format": replay.format.rawValue,
             "parserVersion": replay.parserVersion,
             "selectedWorksheet": jsonValue(replay.selectedWorksheet),
+            "structuredProfile": structuredProfile,
             "balanceOverrides": replay.balanceOverrides.sorted {
                 ($0.account, $0.currency, $0.kind.rawValue, $0.date, $0.locator) <
                 ($1.account, $1.currency, $1.kind.rawValue, $1.date, $1.locator)

@@ -15,7 +15,10 @@ let package = Package(
         .target(
             name: "BankReconciliationEngine",
             resources: [.process("Resources")],
-            linkerSettings: [.linkedFramework("Security")]
+            linkerSettings: [
+                .linkedFramework("Compression"),
+                .linkedFramework("Security")
+            ]
         ),
         .executableTarget(
             name: "BankReconciliationCLI",

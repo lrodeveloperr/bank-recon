@@ -201,7 +201,7 @@ public actor FileEngineStore {
     public func list() throws -> [JobSummary] {
         try withExclusiveRootLock {
             _ = try validatedAnchor()
-            try allLatestRecords().map {
+            return try allLatestRecords().map {
                 JobSummary(id: $0.job.id, mode: $0.job.mode, revision: $0.revision, state: $0.state, resultState: $0.result?.state)
             }.sorted { $0.id.uuidString < $1.id.uuidString }
         }

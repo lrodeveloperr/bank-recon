@@ -2,7 +2,7 @@ name: Apple Engine Gate
 
 on:
   push:
-    branches: [main]
+    branches: [main, engine-finalize-1-3]
   pull_request:
     branches: [main]
   workflow_dispatch:

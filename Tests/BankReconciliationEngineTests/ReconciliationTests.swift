@@ -3,6 +3,52 @@ import XCTest
 @testable import BankReconciliationEngine
 
 final class ReconciliationTests: XCTestCase {
+    func testControlledFuzzyMatchingUsesMutualUniqueBestCandidate() throws {
+        let left = try matchingSource(role: .bank, sourceID: "left", rows: [
+            ("L1", "2026-01-02", "10", "ACME Invoice 123")
+        ])
+        let right = try matchingSource(role: .ledger, sourceID: "right", rows: [
+            ("R1", "2026-01-03", "10", "acme invoice 123")
+        ])
+        let result = try ReconciliationEngine().run(ReconciliationJob(
+            mode: .bankVsLedger, period: left.period, sources: [left, right]
+        ))
+        XCTAssertEqual(result.matches.count, 1)
+        XCTAssertEqual(result.matches[0].kind, .fuzzy)
+        XCTAssertTrue(result.exceptions.contains { $0.kind == .dateChanged })
+    }
+
+    func testFuzzyTieFailsClosed() throws {
+        let left = try matchingSource(role: .bank, sourceID: "left", rows: [
+            ("L1", "2026-01-02", "10", "Same text")
+        ])
+        let right = try matchingSource(role: .ledger, sourceID: "right", rows: [
+            ("R1", "2026-01-02", "10", "Same text"),
+            ("R2", "2026-01-02", "10", "Same text")
+        ])
+        let result = try ReconciliationEngine().run(ReconciliationJob(
+            mode: .bankVsLedger, period: left.period, sources: [left, right]
+        ))
+        XCTAssertFalse(result.matches.contains { $0.kind == .fuzzy })
+        XCTAssertTrue(result.exceptions.contains { $0.kind == .ambiguousCandidate })
+        XCTAssertEqual(result.state, .cannotConclude)
+    }
+
+    func testBoundedSplitCandidateReplacesGenericMissingNoise() throws {
+        let left = try matchingSource(role: .bank, sourceID: "left", rows: [
+            ("L1", "2026-01-02", "100", "Batch")
+        ])
+        let right = try matchingSource(role: .ledger, sourceID: "right", rows: [
+            ("R1", "2026-01-02", "60", "Part one"),
+            ("R2", "2026-01-02", "40", "Part two")
+        ])
+        let result = try ReconciliationEngine().run(ReconciliationJob(
+            mode: .bankVsLedger, period: left.period, sources: [left, right]
+        ))
+        XCTAssertEqual(result.exceptions.filter { $0.kind == .possibleSplitOrMerge }.count, 1)
+        XCTAssertFalse(result.exceptions.contains { $0.kind == .missingFromLedger || $0.kind == .unexpectedLedgerItem })
+    }
+
     func testBalancedSampleAndEvidenceReplay() throws {
         let sample = try SampleFactory.balancedModeA()
         XCTAssertEqual(sample.result.state, .reconciled)
@@ -185,5 +231,27 @@ final class ReconciliationTests: XCTestCase {
             lockedAt: "2026-09-22T00:00:00Z"
         )
         try EvidenceLocker().verify(evidence, job: job, result: result)
+    }
+
+    private func matchingSource(
+        role: SourceRole,
+        sourceID: String,
+        rows: [(locator: String, date: String, amount: String, description: String)]
+    ) throws -> SourceStatement {
+        let period = try ReconciliationPeriod(start: LocalDate(iso8601: "2026-01-01"), end: LocalDate(iso8601: "2026-01-31"))
+        let currency = try CurrencyCode("USD")
+        return SourceStatement(
+            role: role,
+            file: SourceFileProof(sourceID: sourceID, filename: "\(sourceID).csv", byteCount: 0, sha256: Hashing.sha256(Data())),
+            replay: ParseReplayDescriptor(format: .csv, parserVersion: DelimitedParser.version),
+            period: period,
+            transactions: try rows.enumerated().map { index, row in
+                CanonicalTransaction(
+                    sourceID: sourceID, locator: row.locator, sourceOrdinal: index,
+                    account: "A", currency: currency, bookingDate: try LocalDate(iso8601: row.date),
+                    amount: try ExactAmount(parsing: row.amount), description: row.description
+                )
+            }
+        )
     }
 }

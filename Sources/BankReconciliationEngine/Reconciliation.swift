@@ -4,6 +4,7 @@ public struct ReconciliationEngine: Sendable {
     public init() {}
 
     public func run(_ job: ReconciliationJob) throws -> ReconciliationResult {
+        try validateMatchingPolicy(job.matchingPolicy ?? .default)
         let ordered = try validateAndOrderSources(job)
         if job.mode == .singleStatement {
             return try proveSingleStatement(ordered[0], job: job)
@@ -126,6 +127,24 @@ public struct ReconciliationEngine: Sendable {
         var description: String { "\(partition) \(kind.rawValue)" }
     }
 
+    private struct FuzzyCandidate: Hashable {
+        let leftLocator: String
+        let rightLocator: String
+        let similarityPermille: Int
+        let dateDistanceDays: Int
+    }
+
+    private struct SplitMergeCandidate: Hashable {
+        let leftLocators: [String]
+        let rightLocators: [String]
+        let partition: PartitionKey
+        let amount: ExactAmount
+
+        var signature: String {
+            "\(leftLocators.joined(separator: ","))|\(rightLocators.joined(separator: ","))"
+        }
+    }
+
     private func compare(_ left: SourceStatement, _ right: SourceStatement, job: ReconciliationJob) throws -> ReconciliationResult {
         var exceptions = structuralExceptions(left, side: .left) + structuralExceptions(right, side: .right)
         exceptions += duplicateExceptions(left.transactions, side: .left)
@@ -210,16 +229,55 @@ public struct ReconciliationEngine: Sendable {
             }
         }
 
+        let policy = job.matchingPolicy ?? .default
+        let fuzzy = try fuzzyMatches(
+            left: unmatchedLeft.compactMap { leftByLocator[$0] },
+            right: unmatchedRight.compactMap { rightByLocator[$0] },
+            policy: policy
+        )
+        exceptions += fuzzy.ambiguous
+        for candidate in fuzzy.accepted {
+            guard unmatchedLeft.contains(candidate.leftLocator), unmatchedRight.contains(candidate.rightLocator),
+                  let lhs = leftByLocator[candidate.leftLocator], let rhs = rightByLocator[candidate.rightLocator] else {
+                throw EngineError.integrityFailure("fuzzy matching reused a transaction")
+            }
+            guard partition(lhs) == partition(rhs), lhs.amount == rhs.amount else {
+                throw EngineError.integrityFailure("fuzzy match crossed a hard account, currency or amount gate")
+            }
+            matches.append(TransactionMatch(leftLocator: lhs.locator, rightLocator: rhs.locator, kind: .fuzzy))
+            unmatchedLeft.remove(lhs.locator)
+            unmatchedRight.remove(rhs.locator)
+            exceptions += mutationExceptions(lhs, rhs)
+        }
+
+        let splitMerge = try splitMergeCandidates(
+            left: unmatchedLeft.compactMap { leftByLocator[$0] },
+            right: unmatchedRight.compactMap { rightByLocator[$0] },
+            policy: policy
+        )
+        var splitMergeLeft: Set<String> = []
+        var splitMergeRight: Set<String> = []
+        for candidate in splitMerge {
+            splitMergeLeft.formUnion(candidate.leftLocators)
+            splitMergeRight.formUnion(candidate.rightLocators)
+            exceptions.append(ReconciliationException(
+                kind: .possibleSplitOrMerge,
+                leftLocators: candidate.leftLocators,
+                rightLocators: candidate.rightLocators,
+                detail: "Possible split/merge in \(candidate.partition): exact combined amount \(candidate.amount)"
+            ))
+        }
+
         exceptions += crossPartitionStrongIDExceptions(
             unmatchedLeft.compactMap { leftByLocator[$0] },
             unmatchedRight.compactMap { rightByLocator[$0] }
         )
 
-        for locator in unmatchedLeft.sorted() {
+        for locator in unmatchedLeft.subtracting(splitMergeLeft).sorted() {
             let kind: ExceptionKind = job.mode == .bankVsLedger ? .missingFromLedger : .deletedFromNewerExport
             exceptions.append(ReconciliationException(kind: kind, leftLocators: [locator], detail: "No deterministic counterpart"))
         }
-        for locator in unmatchedRight.sorted() {
+        for locator in unmatchedRight.subtracting(splitMergeRight).sorted() {
             let kind: ExceptionKind = job.mode == .bankVsLedger ? .unexpectedLedgerItem : .addedToNewerExport
             exceptions.append(ReconciliationException(kind: kind, rightLocators: [locator], detail: "No deterministic counterpart"))
         }
@@ -251,6 +309,247 @@ public struct ReconciliationEngine: Sendable {
             amount: transaction.amount,
             reference: reference
         )
+    }
+
+    private func validateMatchingPolicy(_ policy: MatchingPolicy) throws {
+        guard (0...31).contains(policy.maximumDateDistanceDays),
+              (0...1_000).contains(policy.minimumTextSimilarityPermille),
+              (1...100_000).contains(policy.maximumFuzzyCandidatePairs),
+              (1...512).contains(policy.maximumComparedTextScalars),
+              (2...6).contains(policy.maximumSplitMergeGroupSize),
+              (1...1_000_000).contains(policy.maximumSplitMergeEvaluations) else {
+            throw EngineError.invalidConfiguration("matching policy is outside its bounded limits")
+        }
+    }
+
+    private func fuzzyMatches(
+        left: [CanonicalTransaction],
+        right: [CanonicalTransaction],
+        policy: MatchingPolicy
+    ) throws -> (accepted: [FuzzyCandidate], ambiguous: [ReconciliationException]) {
+        guard policy.fuzzyMatchingEnabled else { return ([], []) }
+        var candidates: [FuzzyCandidate] = []
+        for lhs in left.sorted(by: { $0.locator < $1.locator }) {
+            for rhs in right.sorted(by: { $0.locator < $1.locator }) {
+                guard partition(lhs) == partition(rhs), lhs.amount == rhs.amount else { continue }
+                let distance = dateDistance(lhs.bookingDate, rhs.bookingDate)
+                guard distance <= policy.maximumDateDistanceDays else { continue }
+                if let leftID = cleaned(lhs.strongID), let rightID = cleaned(rhs.strongID), leftID != rightID { continue }
+                guard let leftText = comparisonText(lhs, maximumScalars: policy.maximumComparedTextScalars),
+                      let rightText = comparisonText(rhs, maximumScalars: policy.maximumComparedTextScalars) else { continue }
+                let similarity = textSimilarityPermille(leftText, rightText)
+                guard similarity >= policy.minimumTextSimilarityPermille else { continue }
+                candidates.append(FuzzyCandidate(
+                    leftLocator: lhs.locator,
+                    rightLocator: rhs.locator,
+                    similarityPermille: similarity,
+                    dateDistanceDays: distance
+                ))
+                guard candidates.count <= policy.maximumFuzzyCandidatePairs else {
+                    throw EngineError.resourceLimit("fuzzy candidate pairs")
+                }
+            }
+        }
+
+        let leftGroups = Dictionary(grouping: candidates, by: \.leftLocator)
+        let rightGroups = Dictionary(grouping: candidates, by: \.rightLocator)
+        var leftChoice: [String: FuzzyCandidate] = [:]
+        var rightChoice: [String: FuzzyCandidate] = [:]
+        var ambiguous: [ReconciliationException] = []
+        var ambiguitySignatures: Set<String> = []
+
+        for locator in leftGroups.keys.sorted() {
+            guard let ranked = leftGroups[locator]?.sorted(by: fuzzyOrder), let first = ranked.first else { continue }
+            let tied = ranked.filter { sameFuzzyRank($0, first) }
+            if tied.count == 1 {
+                leftChoice[locator] = first
+            } else {
+                let rights = tied.map(\.rightLocator).sorted()
+                let signature = "L|\(locator)|\(rights.joined(separator: ","))"
+                if ambiguitySignatures.insert(signature).inserted {
+                    ambiguous.append(ReconciliationException(
+                        kind: .ambiguousCandidate,
+                        leftLocators: [locator], rightLocators: rights,
+                        detail: "Fuzzy candidates tie at \(first.similarityPermille)/1000 similarity and \(first.dateDistanceDays) day distance"
+                    ))
+                }
+            }
+        }
+        for locator in rightGroups.keys.sorted() {
+            guard let ranked = rightGroups[locator]?.sorted(by: fuzzyOrder), let first = ranked.first else { continue }
+            let tied = ranked.filter { sameFuzzyRank($0, first) }
+            if tied.count == 1 {
+                rightChoice[locator] = first
+            } else {
+                let lefts = tied.map(\.leftLocator).sorted()
+                let signature = "R|\(lefts.joined(separator: ","))|\(locator)"
+                if ambiguitySignatures.insert(signature).inserted {
+                    ambiguous.append(ReconciliationException(
+                        kind: .ambiguousCandidate,
+                        leftLocators: lefts, rightLocators: [locator],
+                        detail: "Fuzzy candidates tie at \(first.similarityPermille)/1000 similarity and \(first.dateDistanceDays) day distance"
+                    ))
+                }
+            }
+        }
+
+        let accepted = leftChoice.values.filter { candidate in
+            rightChoice[candidate.rightLocator] == candidate
+        }.sorted(by: fuzzyOrder)
+        return (accepted, ambiguous)
+    }
+
+    private func fuzzyOrder(_ lhs: FuzzyCandidate, _ rhs: FuzzyCandidate) -> Bool {
+        if lhs.similarityPermille != rhs.similarityPermille { return lhs.similarityPermille > rhs.similarityPermille }
+        if lhs.dateDistanceDays != rhs.dateDistanceDays { return lhs.dateDistanceDays < rhs.dateDistanceDays }
+        return (lhs.leftLocator, lhs.rightLocator) < (rhs.leftLocator, rhs.rightLocator)
+    }
+
+    private func sameFuzzyRank(_ lhs: FuzzyCandidate, _ rhs: FuzzyCandidate) -> Bool {
+        lhs.similarityPermille == rhs.similarityPermille && lhs.dateDistanceDays == rhs.dateDistanceDays
+    }
+
+    private func comparisonText(_ transaction: CanonicalTransaction, maximumScalars: Int) -> [UInt32]? {
+        let source = [transaction.reference, transaction.description, transaction.payee, transaction.memo]
+            .compactMap(cleaned)
+            .joined(separator: " ")
+        guard !source.isEmpty, source.unicodeScalars.count <= maximumScalars else { return nil }
+        let folded = source.folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+        var output: [UInt32] = []
+        var pendingSpace = false
+        for scalar in folded.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                if pendingSpace, !output.isEmpty { output.append(32) }
+                output.append(scalar.value)
+                pendingSpace = false
+            } else {
+                pendingSpace = true
+            }
+        }
+        return output.isEmpty ? nil : output
+    }
+
+    private func textSimilarityPermille(_ left: [UInt32], _ right: [UInt32]) -> Int {
+        if left == right { return 1_000 }
+        let longest = max(left.count, right.count)
+        guard longest > 0 else { return 0 }
+        var previous = Array(0...right.count)
+        for leftIndex in left.indices {
+            var current = Array(repeating: 0, count: right.count + 1)
+            current[0] = leftIndex + 1
+            for rightIndex in right.indices {
+                let substitution = previous[rightIndex] + (left[leftIndex] == right[rightIndex] ? 0 : 1)
+                current[rightIndex + 1] = min(
+                    min(previous[rightIndex + 1] + 1, current[rightIndex] + 1),
+                    substitution
+                )
+            }
+            previous = current
+        }
+        return ((longest - previous[right.count]) * 1_000) / longest
+    }
+
+    private func dateDistance(_ left: LocalDate, _ right: LocalDate) -> Int {
+        abs(julianDay(left) - julianDay(right))
+    }
+
+    private func julianDay(_ date: LocalDate) -> Int {
+        let a = (14 - date.month) / 12
+        let y = date.year + 4_800 - a
+        let m = date.month + (12 * a) - 3
+        return date.day + ((153 * m + 2) / 5) + (365 * y) + (y / 4) - (y / 100) + (y / 400) - 32_045
+    }
+
+    private func splitMergeCandidates(
+        left: [CanonicalTransaction],
+        right: [CanonicalTransaction],
+        policy: MatchingPolicy
+    ) throws -> [SplitMergeCandidate] {
+        guard policy.splitMergeCandidatesEnabled else { return [] }
+        let leftGroups = Dictionary(grouping: left, by: partition)
+        let rightGroups = Dictionary(grouping: right, by: partition)
+        var evaluations = 0
+        var unique: [String: SplitMergeCandidate] = [:]
+        for key in Set(leftGroups.keys).intersection(rightGroups.keys).sorted() {
+            let leftItems = (leftGroups[key] ?? []).sorted { $0.locator < $1.locator }
+            let rightItems = (rightGroups[key] ?? []).sorted { $0.locator < $1.locator }
+            let leftSingles = try oneToManyCandidates(
+                singles: leftItems, components: rightItems, singleOnLeft: true,
+                partition: key, policy: policy, evaluations: &evaluations
+            )
+            let rightSingles = try oneToManyCandidates(
+                singles: rightItems, components: leftItems, singleOnLeft: false,
+                partition: key, policy: policy, evaluations: &evaluations
+            )
+            for candidate in leftSingles + rightSingles { unique[candidate.signature] = candidate }
+        }
+        return unique.values.sorted {
+            ($0.partition, $0.leftLocators.joined(), $0.rightLocators.joined()) <
+            ($1.partition, $1.leftLocators.joined(), $1.rightLocators.joined())
+        }
+    }
+
+    private func oneToManyCandidates(
+        singles: [CanonicalTransaction],
+        components: [CanonicalTransaction],
+        singleOnLeft: Bool,
+        partition: PartitionKey,
+        policy: MatchingPolicy,
+        evaluations: inout Int
+    ) throws -> [SplitMergeCandidate] {
+        guard components.count >= 2 else { return [] }
+        var output: [SplitMergeCandidate] = []
+        for single in singles where single.amount.mantissa != 0 {
+            let eligible = components.filter {
+                ($0.amount.mantissa > 0) == (single.amount.mantissa > 0) &&
+                dateDistance($0.bookingDate, single.bookingDate) <= policy.maximumDateDistanceDays
+            }
+            guard eligible.count >= 2 else { continue }
+            for size in 2...min(policy.maximumSplitMergeGroupSize, eligible.count) {
+                try enumerateCombinations(
+                    eligible, size: size, start: 0, selected: [],
+                    evaluations: &evaluations, maximumEvaluations: policy.maximumSplitMergeEvaluations
+                ) { values in
+                    guard try sum(values) == single.amount else { return }
+                    let componentLocators = values.map(\.locator).sorted()
+                    output.append(SplitMergeCandidate(
+                        leftLocators: singleOnLeft ? [single.locator] : componentLocators,
+                        rightLocators: singleOnLeft ? componentLocators : [single.locator],
+                        partition: partition,
+                        amount: single.amount
+                    ))
+                }
+            }
+        }
+        return output
+    }
+
+    private func enumerateCombinations(
+        _ values: [CanonicalTransaction],
+        size: Int,
+        start: Int,
+        selected: [CanonicalTransaction],
+        evaluations: inout Int,
+        maximumEvaluations: Int,
+        body: ([CanonicalTransaction]) throws -> Void
+    ) throws {
+        if selected.count == size {
+            evaluations += 1
+            guard evaluations <= maximumEvaluations else { throw EngineError.resourceLimit("split/merge evaluations") }
+            try body(selected)
+            return
+        }
+        let remainingNeeded = size - selected.count
+        guard values.count - start >= remainingNeeded else { return }
+        for index in start...(values.count - remainingNeeded) {
+            try enumerateCombinations(
+                values, size: size, start: index + 1, selected: selected + [values[index]],
+                evaluations: &evaluations, maximumEvaluations: maximumEvaluations, body: body
+            )
+        }
     }
 
     private func groupedUnique<Key: Hashable>(_ transactions: [CanonicalTransaction], key: (CanonicalTransaction) -> Key?) -> [Key: [CanonicalTransaction]] {

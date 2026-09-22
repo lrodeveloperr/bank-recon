@@ -6,19 +6,31 @@ public struct ParserLimits: Hashable, Codable, Sendable {
     public let maximumColumns: Int
     public let maximumFieldBytes: Int
     public let maximumUnicodeScalars: Int
+    public let maximumArchiveEntries: Int
+    public let maximumExpandedBytes: Int
+    public let maximumXMLNodes: Int
+    public let maximumXMLDepth: Int
 
     public init(
         maximumBytes: Int = 64 * 1_024 * 1_024,
         maximumRecords: Int = 500_000,
         maximumColumns: Int = 256,
         maximumFieldBytes: Int = 16_384,
-        maximumUnicodeScalars: Int = 10_000_000
+        maximumUnicodeScalars: Int = 10_000_000,
+        maximumArchiveEntries: Int = 1_024,
+        maximumExpandedBytes: Int = 128 * 1_024 * 1_024,
+        maximumXMLNodes: Int = 2_000_000,
+        maximumXMLDepth: Int = 128
     ) {
         self.maximumBytes = maximumBytes
         self.maximumRecords = maximumRecords
         self.maximumColumns = maximumColumns
         self.maximumFieldBytes = maximumFieldBytes
         self.maximumUnicodeScalars = maximumUnicodeScalars
+        self.maximumArchiveEntries = maximumArchiveEntries
+        self.maximumExpandedBytes = maximumExpandedBytes
+        self.maximumXMLNodes = maximumXMLNodes
+        self.maximumXMLDepth = maximumXMLDepth
     }
 }
 
@@ -276,7 +288,11 @@ public struct DelimitedParser: Sendable {
 
 public struct FormatRouter: Sendable {
     private let delimited: DelimitedParser
-    public init(limits: ParserLimits = ParserLimits()) { self.delimited = DelimitedParser(limits: limits) }
+    private let limits: ParserLimits
+    public init(limits: ParserLimits = ParserLimits()) {
+        self.limits = limits
+        self.delimited = DelimitedParser(limits: limits)
+    }
 
     public func parse(
         data: Data,
@@ -303,8 +319,30 @@ public struct FormatRouter: Sendable {
                 warnings: parsed.warnings,
                 invalidLocators: parsed.invalidLocators
             )
-        default:
-            throw EngineError.unsupportedFormat(replay.format)
+        case .xlsx:
+            return try XLSXParser(limits: limits).parse(
+                data: data, filename: filename, role: role, period: period, replay: replay
+            )
+        case .ofx, .qfx, .qbo:
+            return try OFXParser(limits: limits).parse(
+                data: data, filename: filename, role: role, period: period, replay: replay
+            )
+        case .qif, .qmtf:
+            return try QIFParser(limits: limits).parse(
+                data: data, filename: filename, role: role, period: period, replay: replay
+            )
+        case .camt053, .camt054:
+            return try CAMTParser(limits: limits).parse(
+                data: data, filename: filename, role: role, period: period, replay: replay
+            )
+        case .mt940:
+            return try MT940Parser(limits: limits).parse(
+                data: data, filename: filename, role: role, period: period, replay: replay
+            )
+        case .bai2:
+            return try BAI2Parser(limits: limits).parse(
+                data: data, filename: filename, role: role, period: period, replay: replay
+            )
         }
     }
 }

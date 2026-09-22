@@ -317,6 +317,39 @@ public enum InputFormat: String, Codable, Sendable, Hashable, CaseIterable {
 }
 public enum DateOrder: String, Codable, Sendable, Hashable { case ymd, dmy, mdy }
 
+public struct MatchingPolicy: Hashable, Codable, Sendable {
+    public let fuzzyMatchingEnabled: Bool
+    public let maximumDateDistanceDays: Int
+    public let minimumTextSimilarityPermille: Int
+    public let maximumFuzzyCandidatePairs: Int
+    public let maximumComparedTextScalars: Int
+    public let splitMergeCandidatesEnabled: Bool
+    public let maximumSplitMergeGroupSize: Int
+    public let maximumSplitMergeEvaluations: Int
+
+    public init(
+        fuzzyMatchingEnabled: Bool = true,
+        maximumDateDistanceDays: Int = 3,
+        minimumTextSimilarityPermille: Int = 850,
+        maximumFuzzyCandidatePairs: Int = 20_000,
+        maximumComparedTextScalars: Int = 256,
+        splitMergeCandidatesEnabled: Bool = true,
+        maximumSplitMergeGroupSize: Int = 4,
+        maximumSplitMergeEvaluations: Int = 50_000
+    ) {
+        self.fuzzyMatchingEnabled = fuzzyMatchingEnabled
+        self.maximumDateDistanceDays = maximumDateDistanceDays
+        self.minimumTextSimilarityPermille = minimumTextSimilarityPermille
+        self.maximumFuzzyCandidatePairs = maximumFuzzyCandidatePairs
+        self.maximumComparedTextScalars = maximumComparedTextScalars
+        self.splitMergeCandidatesEnabled = splitMergeCandidatesEnabled
+        self.maximumSplitMergeGroupSize = maximumSplitMergeGroupSize
+        self.maximumSplitMergeEvaluations = maximumSplitMergeEvaluations
+    }
+
+    public static let `default` = MatchingPolicy()
+}
+
 public struct DelimitedMapping: Hashable, Codable, Sendable {
     public let delimiter: Character
     public let hasHeader: Bool
@@ -367,6 +400,88 @@ public struct DelimitedMapping: Hashable, Codable, Sendable {
         self.defaultAccount = defaultAccount
         self.defaultCurrency = defaultCurrency
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case delimiter, hasHeader, dateColumn, amountColumn, accountColumn, currencyColumn
+        case strongIDColumn, referenceColumn, descriptionColumn, runningBalanceColumn
+        case dateOrder, decimalSeparator, groupingSeparator, defaultAccount, defaultCurrency
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        func character(_ key: CodingKeys) throws -> Character {
+            let value = try container.decode(String.self, forKey: key)
+            guard value.count == 1, let character = value.first else {
+                throw DecodingError.dataCorruptedError(forKey: key, in: container, debugDescription: "Expected exactly one Character")
+            }
+            return character
+        }
+        func optionalCharacter(_ key: CodingKeys) throws -> Character? {
+            guard let value = try container.decodeIfPresent(String.self, forKey: key) else { return nil }
+            guard value.count == 1, let character = value.first else {
+                throw DecodingError.dataCorruptedError(forKey: key, in: container, debugDescription: "Expected exactly one Character")
+            }
+            return character
+        }
+        self.init(
+            delimiter: try character(.delimiter),
+            hasHeader: try container.decode(Bool.self, forKey: .hasHeader),
+            dateColumn: try container.decode(Int.self, forKey: .dateColumn),
+            amountColumn: try container.decode(Int.self, forKey: .amountColumn),
+            accountColumn: try container.decodeIfPresent(Int.self, forKey: .accountColumn),
+            currencyColumn: try container.decodeIfPresent(Int.self, forKey: .currencyColumn),
+            strongIDColumn: try container.decodeIfPresent(Int.self, forKey: .strongIDColumn),
+            referenceColumn: try container.decodeIfPresent(Int.self, forKey: .referenceColumn),
+            descriptionColumn: try container.decodeIfPresent(Int.self, forKey: .descriptionColumn),
+            runningBalanceColumn: try container.decodeIfPresent(Int.self, forKey: .runningBalanceColumn),
+            dateOrder: try container.decode(DateOrder.self, forKey: .dateOrder),
+            decimalSeparator: try character(.decimalSeparator),
+            groupingSeparator: try optionalCharacter(.groupingSeparator),
+            defaultAccount: try container.decodeIfPresent(String.self, forKey: .defaultAccount),
+            defaultCurrency: try container.decodeIfPresent(String.self, forKey: .defaultCurrency)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(String(delimiter), forKey: .delimiter)
+        try container.encode(hasHeader, forKey: .hasHeader)
+        try container.encode(dateColumn, forKey: .dateColumn)
+        try container.encode(amountColumn, forKey: .amountColumn)
+        try container.encodeIfPresent(accountColumn, forKey: .accountColumn)
+        try container.encodeIfPresent(currencyColumn, forKey: .currencyColumn)
+        try container.encodeIfPresent(strongIDColumn, forKey: .strongIDColumn)
+        try container.encodeIfPresent(referenceColumn, forKey: .referenceColumn)
+        try container.encodeIfPresent(descriptionColumn, forKey: .descriptionColumn)
+        try container.encodeIfPresent(runningBalanceColumn, forKey: .runningBalanceColumn)
+        try container.encode(dateOrder, forKey: .dateOrder)
+        try container.encode(String(decimalSeparator), forKey: .decimalSeparator)
+        try container.encodeIfPresent(groupingSeparator.map(String.init), forKey: .groupingSeparator)
+        try container.encodeIfPresent(defaultAccount, forKey: .defaultAccount)
+        try container.encodeIfPresent(defaultCurrency, forKey: .defaultCurrency)
+    }
+}
+
+public struct StructuredImportProfile: Hashable, Codable, Sendable {
+    public let dateOrder: DateOrder
+    public let decimalSeparator: String
+    public let groupingSeparator: String?
+    public let defaultAccount: String?
+    public let defaultCurrency: String?
+
+    public init(
+        dateOrder: DateOrder = .ymd,
+        decimalSeparator: String = ".",
+        groupingSeparator: String? = nil,
+        defaultAccount: String? = nil,
+        defaultCurrency: String? = nil
+    ) {
+        self.dateOrder = dateOrder
+        self.decimalSeparator = decimalSeparator
+        self.groupingSeparator = groupingSeparator
+        self.defaultAccount = defaultAccount
+        self.defaultCurrency = defaultCurrency
+    }
 }
 
 public struct ParseReplayDescriptor: Hashable, Codable, Sendable {
@@ -374,6 +489,7 @@ public struct ParseReplayDescriptor: Hashable, Codable, Sendable {
     public let parserVersion: String
     public let delimitedMapping: DelimitedMapping?
     public let selectedWorksheet: String?
+    public let structuredProfile: StructuredImportProfile?
     public let balanceOverrides: [StatementBalance]
 
     public init(
@@ -381,12 +497,14 @@ public struct ParseReplayDescriptor: Hashable, Codable, Sendable {
         parserVersion: String,
         delimitedMapping: DelimitedMapping? = nil,
         selectedWorksheet: String? = nil,
+        structuredProfile: StructuredImportProfile? = nil,
         balanceOverrides: [StatementBalance] = []
     ) {
         self.format = format
         self.parserVersion = parserVersion
         self.delimitedMapping = delimitedMapping
         self.selectedWorksheet = selectedWorksheet
+        self.structuredProfile = structuredProfile
         self.balanceOverrides = balanceOverrides
     }
 }
@@ -523,7 +641,7 @@ public struct SourceStatement: Equatable, Codable, Sendable {
     }
 }
 
-public enum MatchKind: String, Codable, Sendable, Hashable { case strongID, exactComposite, manual }
+public enum MatchKind: String, Codable, Sendable, Hashable { case strongID, exactComposite, fuzzy, manual }
 
 public struct TransactionMatch: Hashable, Codable, Sendable {
     public let leftLocator: String
@@ -663,6 +781,7 @@ public struct ReconciliationJob: Equatable, Codable, Sendable {
     public let mode: ReconciliationMode
     public let period: ReconciliationPeriod
     public let sources: [SourceStatement]
+    public let matchingPolicy: MatchingPolicy?
     public let manualMatches: [ManualMatchDecision]
     public let decisions: [UserDecision]
 
@@ -671,6 +790,7 @@ public struct ReconciliationJob: Equatable, Codable, Sendable {
         mode: ReconciliationMode,
         period: ReconciliationPeriod,
         sources: [SourceStatement],
+        matchingPolicy: MatchingPolicy? = .default,
         manualMatches: [ManualMatchDecision] = [],
         decisions: [UserDecision] = []
     ) {
@@ -678,6 +798,7 @@ public struct ReconciliationJob: Equatable, Codable, Sendable {
         self.mode = mode
         self.period = period
         self.sources = sources
+        self.matchingPolicy = matchingPolicy
         self.manualMatches = manualMatches
         self.decisions = decisions
     }
