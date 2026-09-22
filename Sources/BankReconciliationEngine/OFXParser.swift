@@ -126,7 +126,7 @@ public struct OFXParser: Sendable {
         guard let body = String(data: data.subdata(in: rootOffset..<data.count), encoding: encoding) else {
             throw EngineError.malformedInput("OFX text cannot be decoded")
         }
-        let xmlVersion = upperHeader.contains("VERSION:2") || upperHeader.contains("OFXSGML=\"2") || body.contains("</STMTTRN>")
+        let xmlVersion = upperHeader.contains("<?XML") || upperHeader.contains("VERSION:2") || upperHeader.contains("OFXSGML=\"2")
         return DecodedOFX(body: body, isXML: xmlVersion)
     }
 
