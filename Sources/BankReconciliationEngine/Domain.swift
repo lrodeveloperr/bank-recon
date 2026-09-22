@@ -15,6 +15,8 @@ public enum EngineError: Error, Equatable, Sendable {
     case lockedMutation
     case integrityFailure(String)
     case notFound(String)
+    case entitlementRequired(EntitlementTier)
+    case purchaseVerificationFailed
 }
 
 extension EngineError: LocalizedError {
@@ -34,6 +36,8 @@ extension EngineError: LocalizedError {
         case .lockedMutation: "A locked reconciliation is immutable."
         case .integrityFailure(let value): "Integrity check failed: \(value)"
         case .notFound(let value): "Not found: \(value)"
+        case .entitlementRequired(let tier): "This action requires the \(tier.rawValue) purchase."
+        case .purchaseVerificationFailed: "The App Store purchase could not be verified."
         }
     }
 }

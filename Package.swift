@@ -9,6 +9,8 @@ let package = Package(
     ],
     products: [
         .library(name: "BankReconciliationEngine", targets: ["BankReconciliationEngine"]),
+        .library(name: "BankReconciliationAppCore", targets: ["BankReconciliationAppCore"]),
+        .executable(name: "bank-reconciliation-app", targets: ["BankReconciliationApp"]),
         .executable(name: "bank-reconcile", targets: ["BankReconciliationCLI"])
     ],
     targets: [
@@ -17,8 +19,17 @@ let package = Package(
             resources: [.process("Resources")],
             linkerSettings: [
                 .linkedLibrary("compression"),
-                .linkedFramework("Security")
+                .linkedFramework("Security"),
+                .linkedFramework("StoreKit")
             ]
+        ),
+        .target(
+            name: "BankReconciliationAppCore",
+            dependencies: ["BankReconciliationEngine"]
+        ),
+        .executableTarget(
+            name: "BankReconciliationApp",
+            dependencies: ["BankReconciliationAppCore"]
         ),
         .executableTarget(
             name: "BankReconciliationCLI",
@@ -27,6 +38,10 @@ let package = Package(
         .testTarget(
             name: "BankReconciliationEngineTests",
             dependencies: ["BankReconciliationEngine"]
+        ),
+        .testTarget(
+            name: "BankReconciliationAppCoreTests",
+            dependencies: ["BankReconciliationAppCore", "BankReconciliationEngine"]
         )
     ]
 )
