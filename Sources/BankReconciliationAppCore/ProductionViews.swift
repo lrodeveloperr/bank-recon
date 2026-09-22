@@ -55,10 +55,14 @@ struct SourceProfileEditorView: View {
                 TextField("Decimal separator", text: $draft.decimalSeparator)
                 TextField("Grouping separator (optional)", text: $draft.groupingSeparator)
             }
-            Section("Defaults") {
+            Section {
                 TextField("Default account", text: $draft.defaultAccount)
                 TextField("Default currency (ISO 4217)", text: $draft.defaultCurrency)
+#if os(iOS)
                     .textInputAutocapitalization(.characters)
+#endif
+            } header: {
+                Text("Defaults")
             }
             Section {
                 Text("Column numbers start at 0. Leave optional columns blank. Defaults are used only when the source file does not provide that field.")
@@ -196,9 +200,9 @@ struct BatchFoldersView: View {
 
     private func selectedPeriod() throws -> ReconciliationPeriod {
         let calendar = Calendar(identifier: .gregorian)
-        func localDate(_ date: Date) -> LocalDate {
+        func localDate(_ date: Date) throws -> LocalDate {
             let parts = calendar.dateComponents([.year, .month, .day], from: date)
-            return LocalDate(year: parts.year ?? 0, month: parts.month ?? 0, day: parts.day ?? 0)
+            return try LocalDate(year: parts.year ?? 0, month: parts.month ?? 0, day: parts.day ?? 0)
         }
         return try ReconciliationPeriod(start: localDate(startDate), end: localDate(endDate))
     }
@@ -216,7 +220,9 @@ struct ReviewWorkspaceView: View {
                 HStack(alignment: .top, spacing: 16) {
                     comparison.frame(maxWidth: .infinity, maxHeight: .infinity)
                     Divider()
-                    inspector.frame(width: min(360, proxy.size.width * 0.34), maxHeight: .infinity)
+                    inspector
+                        .frame(width: min(360, proxy.size.width * 0.34))
+                        .frame(maxHeight: .infinity)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 16) {

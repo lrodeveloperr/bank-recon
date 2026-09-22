@@ -13,7 +13,7 @@ guard let bitmap = NSBitmapImageRep(
     pixelsHigh: 1_024,
     bitsPerSample: 8,
     samplesPerPixel: 4,
-    hasAlpha: false,
+    hasAlpha: true,
     isPlanar: false,
     colorSpaceName: .deviceRGB,
     bytesPerRow: 0,
@@ -89,4 +89,3 @@ guard let data = bitmap.representation(using: .png, properties: [:]) else {
     fatalError("unable to encode icon")
 }
 try data.write(to: URL(fileURLWithPath: CommandLine.arguments[1]), options: .atomic)
-
