@@ -76,6 +76,7 @@ jobs:
         run: >-
           xcodebuild -project BankReconciliation.xcodeproj
           -scheme BankReconciliation
+          -testPlan BankReconciliationStoreKit
           -destination 'platform=macOS'
           -only-testing:BankReconciliationStoreKitTests
           -parallel-testing-enabled NO
@@ -98,7 +99,7 @@ jobs:
             archive
       - name: Package generated Apple deliverables
         run: |
-          ditto -c -k --sequesterRsrc --keepParent BankReconciliation.xcodeproj build-artifacts/BankReconciliation-xcodeproj.zip
+          zip -qry build-artifacts/BankReconciliation-xcodeproj.zip BankReconciliation.xcodeproj BankReconciliationStoreKit.xctestplan
           ditto -c -k --sequesterRsrc --keepParent App/Assets.xcassets build-artifacts/BankReconciliation-assets.zip
       - uses: actions/upload-artifact@v4
         with:

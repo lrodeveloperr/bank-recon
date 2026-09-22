@@ -143,9 +143,8 @@ schemes:
       config: Debug
       gatherCoverageData: true
       macroExpansion: BankReconciliation
-      targets:
-        - name: BankReconciliationEngineTests
-        - name: BankReconciliationAppCoreTests
-        - name: BankReconciliationStoreKitTests
+      testPlans:
+        - path: BankReconciliationStoreKit.xctestplan
+          defaultPlan: true
     archive:
       config: Release

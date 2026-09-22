@@ -4,7 +4,7 @@ Date: 2026-09-22
 
 ## Deliverable
 
-`project.yml` is the source of truth for a universal Apple project. Running `tools/generate_apple_project.sh` creates `BankReconciliation.xcodeproj`, renders every required iPhone, iPad and Mac app-icon slot, and activates the local StoreKit configuration in the shared scheme.
+`project.yml` is the source of truth for a universal Apple project. Running `tools/generate_apple_project.sh` creates `BankReconciliation.xcodeproj`, renders every required iPhone, iPad and Mac app-icon slot, and generates the shared test plan that activates the local StoreKit configuration for the app-hosted lifecycle suite.
 
 | Destination | Minimum OS | Bundle identifier | CI output |
 |---|---:|---|---|

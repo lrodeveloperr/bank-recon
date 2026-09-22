@@ -45,4 +45,9 @@ if ! command -v xcodegen >/dev/null 2>&1; then
   echo "xcodegen is required (brew install xcodegen)" >&2
   exit 69
 fi
+python3 tools/generate_storekit_test_plan.py \
+  --output BankReconciliationStoreKit.xctestplan
 xcodegen generate --spec project.yml
+python3 tools/generate_storekit_test_plan.py \
+  --project BankReconciliation.xcodeproj/project.pbxproj \
+  --output BankReconciliationStoreKit.xctestplan
