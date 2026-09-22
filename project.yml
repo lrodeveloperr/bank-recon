@@ -108,7 +108,8 @@ targets:
 
   BankReconciliationStoreKitTests:
     type: bundle.unit-test
-    platform: iOS
+    platform: auto
+    supportedDestinations: [iOS, macOS]
     sources:
       - path: Tests/BankReconciliationStoreKitTests
       - path: App/StoreKit/BankReconciliation.storekit
