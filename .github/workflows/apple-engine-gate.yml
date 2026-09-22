@@ -54,7 +54,7 @@ jobs:
           plutil -lint App/Info.plist
           plutil -lint App/PrivacyInfo.xcprivacy
           plutil -lint App/BankReconciliation-macOS.entitlements
-          plutil -lint App/StoreKit/BankReconciliation.storekit
+          python3 -m json.tool App/StoreKit/BankReconciliation.storekit >/dev/null
           xcodebuild -project BankReconciliation.xcodeproj -list
       - name: Build iPhone and iPad app
         run: >-
