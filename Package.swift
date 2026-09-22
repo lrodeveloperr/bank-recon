@@ -16,7 +16,7 @@ let package = Package(
             name: "BankReconciliationEngine",
             resources: [.process("Resources")],
             linkerSettings: [
-                .linkedFramework("Compression"),
+                .linkedLibrary("compression"),
                 .linkedFramework("Security")
             ]
         ),
