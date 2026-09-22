@@ -28,13 +28,13 @@ final class StoreKitLifecycleTests: XCTestCase {
     func testExternalPurchaseAndRelaunchSelectHighestVerifiedTier() async throws {
         let session = try makeSession()
         defer { session.clearTransactions() }
-        try session.buyProduct(productIdentifier: catalog.proProductID)
+        _ = try await session.buyProduct(identifier: catalog.proProductID, options: [])
         let service = StoreKitEntitlementService(catalog: catalog)
         let pro = await service.refresh()
         XCTAssertEqual(pro.tier, .pro)
         XCTAssertEqual(pro.verifiedProductIDs, [catalog.proProductID])
 
-        try session.buyProduct(productIdentifier: catalog.accountantProductID)
+        _ = try await session.buyProduct(identifier: catalog.accountantProductID, options: [])
         let relaunchedService = StoreKitEntitlementService(catalog: catalog)
         let accountant = await relaunchedService.refresh()
         XCTAssertEqual(accountant.tier, .accountant)
@@ -44,13 +44,12 @@ final class StoreKitLifecycleTests: XCTestCase {
     func testRefundRemovesNonConsumableEntitlement() async throws {
         let session = try makeSession()
         defer { session.clearTransactions() }
-        try session.buyProduct(productIdentifier: catalog.proProductID)
-        let purchased = try XCTUnwrap(session.allTransactions().last)
+        let purchased = try await session.buyProduct(identifier: catalog.proProductID, options: [])
         let service = StoreKitEntitlementService(catalog: catalog)
         let purchasedSnapshot = await service.refresh()
         XCTAssertEqual(purchasedSnapshot.tier, .pro)
 
-        try session.refundTransaction(identifier: purchased.identifier)
+        try session.refundTransaction(identifier: UInt(purchased.id))
         try await waitForEntitlement(service, tier: .free)
         let refundedSnapshot = await service.refresh()
         XCTAssertTrue(refundedSnapshot.verifiedProductIDs.isEmpty)
