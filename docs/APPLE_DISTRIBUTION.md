@@ -41,15 +41,15 @@ The local catalog is test data and does not upload to App Store Connect. An Acco
 
 ## StoreKit verification matrix
 
-Automated Xcode tests cover:
+The headless CI gate automates:
 
 - both IDs loading as non-consumables at the local US reference prices;
 - Pro purchase and highest-tier Accountant upgrade;
 - entitlement recovery in a fresh service instance after an external purchase;
 - refund removing a non-consumable entitlement;
-- Ask to Buy returning pending without unlocking;
-- interrupted purchase failing closed;
 - local product loading without an App Store network dependency.
+
+The Xcode suite also contains Ask to Buy and interrupted-purchase scenarios for interactive execution. Those two dialog/stateful scenarios are deliberately excluded from the headless gate and remain part of the signed sandbox device pass.
 
 Before release, repeat in-app purchase, cancel, pending approval, `AppStore.sync()` restore, refund/revocation and offline relaunch with Sandbox Apple Accounts against the live product records. StoreKit changes can take time to appear in the sandbox, so record the product state and test timestamp rather than retrying blindly.
 
