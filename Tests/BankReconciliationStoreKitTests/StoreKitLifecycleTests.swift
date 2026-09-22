@@ -25,17 +25,18 @@ final class StoreKitLifecycleTests: XCTestCase {
         XCTAssertEqual(products.first(where: { $0.id == catalog.accountantProductID })?.price, Decimal(string: "99.99"))
     }
 
-    func testPurchaseAndRestoreSelectHighestVerifiedTier() async throws {
+    func testExternalPurchaseAndRelaunchSelectHighestVerifiedTier() async throws {
         let session = try makeSession()
         defer { session.clearTransactions() }
-        _ = try await session.buyProduct(identifier: catalog.proProductID, options: [])
+        try session.buyProduct(productIdentifier: catalog.proProductID)
         let service = StoreKitEntitlementService(catalog: catalog)
         let pro = await service.refresh()
         XCTAssertEqual(pro.tier, .pro)
         XCTAssertEqual(pro.verifiedProductIDs, [catalog.proProductID])
 
-        _ = try await session.buyProduct(identifier: catalog.accountantProductID, options: [])
-        let accountant = try await service.restore()
+        try session.buyProduct(productIdentifier: catalog.accountantProductID)
+        let relaunchedService = StoreKitEntitlementService(catalog: catalog)
+        let accountant = await relaunchedService.refresh()
         XCTAssertEqual(accountant.tier, .accountant)
         XCTAssertEqual(accountant.verifiedProductIDs, catalog.productIDs)
     }
@@ -43,40 +44,45 @@ final class StoreKitLifecycleTests: XCTestCase {
     func testRefundRemovesNonConsumableEntitlement() async throws {
         let session = try makeSession()
         defer { session.clearTransactions() }
-        let purchased = try await session.buyProduct(identifier: catalog.proProductID, options: [])
+        try session.buyProduct(productIdentifier: catalog.proProductID)
+        let purchased = try XCTUnwrap(session.allTransactions().last)
         let service = StoreKitEntitlementService(catalog: catalog)
         let purchasedSnapshot = await service.refresh()
         XCTAssertEqual(purchasedSnapshot.tier, .pro)
 
-        try session.refundTransaction(identifier: UInt(purchased.id))
+        try session.refundTransaction(identifier: purchased.identifier)
         try await waitForEntitlement(service, tier: .free)
         let refundedSnapshot = await service.refresh()
         XCTAssertTrue(refundedSnapshot.verifiedProductIDs.isEmpty)
     }
 
-    func testAskToBuyReturnsPendingWithoutUnlocking() async throws {
+    func testAskToBuyStaysLockedUntilApproved() async throws {
         let session = try makeSession()
         defer { session.clearTransactions() }
         session.askToBuyEnabled = true
+        try session.buyProduct(productIdentifier: catalog.proProductID)
+        let pendingTransaction = try XCTUnwrap(session.allTransactions().last)
         let service = StoreKitEntitlementService(catalog: catalog)
-        let outcome = try await service.purchase(.pro)
-        XCTAssertEqual(outcome, .pending)
-        let snapshot = await service.refresh()
-        XCTAssertEqual(snapshot.tier, .free)
+        let pendingSnapshot = await service.refresh()
+        XCTAssertEqual(pendingSnapshot.tier, .free)
+
+        try session.approveAskToBuyTransaction(identifier: pendingTransaction.identifier)
+        try await waitForEntitlement(service, tier: .pro)
     }
 
-    func testInterruptedPurchaseFailsClosed() async throws {
+    func testInterruptedPurchaseFailsClosedUntilIssueIsResolved() async throws {
         let session = try makeSession()
         defer { session.clearTransactions() }
         session.interruptedPurchasesEnabled = true
+        try session.buyProduct(productIdentifier: catalog.accountantProductID)
+        let interruptedTransaction = try XCTUnwrap(session.allTransactions().last)
         let service = StoreKitEntitlementService(catalog: catalog)
-        do {
-            _ = try await service.purchase(.accountant)
-            XCTFail("interrupted purchase must not unlock Accountant")
-        } catch {
-            let snapshot = await service.refresh()
-            XCTAssertEqual(snapshot.tier, .free)
-        }
+        let interruptedSnapshot = await service.refresh()
+        XCTAssertEqual(interruptedSnapshot.tier, .free)
+
+        session.interruptedPurchasesEnabled = false
+        try session.resolveIssueForTransaction(identifier: interruptedTransaction.identifier)
+        try await waitForEntitlement(service, tier: .accountant)
     }
 
     private func waitForEntitlement(

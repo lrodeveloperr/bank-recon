@@ -45,13 +45,13 @@ Automated Xcode tests cover:
 
 - both IDs loading as non-consumables at the local US reference prices;
 - Pro purchase and highest-tier Accountant upgrade;
-- restore through `AppStore.sync()`;
+- entitlement recovery in a fresh service instance after an external purchase;
 - refund removing a non-consumable entitlement;
 - Ask to Buy returning pending without unlocking;
 - interrupted purchase failing closed;
 - local product loading without an App Store network dependency.
 
-Before release, repeat purchase, cancel, pending approval, restore, refund/revocation and offline relaunch with Sandbox Apple Accounts against the live product records. StoreKit changes can take time to appear in the sandbox, so record the product state and test timestamp rather than retrying blindly.
+Before release, repeat in-app purchase, cancel, pending approval, `AppStore.sync()` restore, refund/revocation and offline relaunch with Sandbox Apple Accounts against the live product records. StoreKit changes can take time to appear in the sandbox, so record the product state and test timestamp rather than retrying blindly.
 
 ## Operator workflows delivered
 

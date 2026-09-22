@@ -15,7 +15,7 @@ This repository contains the deterministic local-first Swift engine and shared S
 - An adaptive SwiftUI workflow for Mac, iPad and iPhone covering imports, previews, a synchronized two-column review, a persistent exception inspector, explanations, locks, evidence packs and settings.
 - A complete source-profile editor and Accountant batch-folder workflow with deterministic `_bank`/`_ledger`, `_old`/`_new` and `_statement` pairing.
 - StoreKit 2 non-consumable Pro and Accountant entitlements, dynamic App Store pricing, fresh verification and purchase restoration.
-- A local StoreKit configuration with five product localizations and automated purchase, restore, refund, Ask to Buy and interrupted-purchase tests.
+- A local StoreKit configuration with five product localizations and automated external purchase/relaunch, refund, Ask to Buy and interrupted-purchase tests.
 - A two-lock free allowance enforced only when a non-sample reconciliation is successfully committed.
 - Bounded digest-verified local backup/restore that deliberately excludes App Store entitlement state.
 - PDF, CSV and canonical JSON evidence exports with source proof, parser mappings, totals, exceptions, decisions and limitations.
