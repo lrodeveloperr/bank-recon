@@ -5,7 +5,7 @@
 | Gate | State | Evidence / blocker |
 |---|---|---|
 | Locked scope and contract | PASS | `docs/PRODUCT_SPEC.md`, `docs/CANONICAL_ENGINE_CONTRACT.md` |
-| Exact arithmetic and deterministic core | APPLE + PORTABLE PASS | 40 Swift tests plus `verification/portable-gate-results.json` |
+| Exact arithmetic and deterministic core | APPLE + PORTABLE PASS | 41 Swift tests plus `verification/portable-gate-results.json` |
 | Controlled fuzzy and split/merge matching | APPLE PASS | Mutual-unique-best fuzzy tests, ambiguity test and bounded split candidate test |
 | CSV/TSV and required structured adapters | APPLE PASS | XLSX, OFX/QFX/QBO, QIF/QMTF, CAMT.053/054, MT940 and BAI2 route through tested parsers |
 | Swift compile and unit tests | PASS | `verification/apple-gate-results.json`; warnings-as-errors build on Apple Swift 6.1.2 / macOS 15 arm64 |

@@ -1,9 +1,26 @@
 {
   "schemaVersion": 1,
-  "package": "BankReconciliationEngine",
-  "version": "0.2.0-recovery",
+  "package": "Bank Reconciliation: CSV",
+  "version": "0.4.0-app-candidate",
+  "swiftTargets": [
+    "BankReconciliationEngine",
+    "BankReconciliationAppCore",
+    "BankReconciliationApp",
+    "BankReconciliationCLI"
+  ],
   "externalPackageDependencies": [],
-  "appleFrameworks": ["Foundation", "CryptoKit", "Darwin", "Security"],
+  "appleFrameworks": [
+    "Combine",
+    "Compression",
+    "CryptoKit",
+    "Darwin",
+    "Foundation",
+    "Security",
+    "StoreKit",
+    "SwiftUI",
+    "UniformTypeIdentifiers"
+  ],
   "networkRuntimeDependencies": [],
-  "buildStatus": "SOURCE_ONLY_UNCOMPILED"
+  "buildStatus": "APPLE_GATE_PASS",
+  "appleGateRunId": 35742751689
 }

@@ -18,7 +18,7 @@ This repository contains the deterministic local-first Swift engine and shared S
 - Bounded digest-verified local backup/restore that deliberately excludes App Store entitlement state.
 - PDF, CSV and canonical JSON evidence exports with source proof, parser mappings, totals, exceptions, decisions and limitations.
 - A portable Python reference oracle and static gate runnable without Xcode.
-- A GitHub-hosted Apple gate that builds both the package and SwiftUI executable with warnings as errors and runs 40 Swift tests, the CLI fixture harness and the portable gates.
+- A GitHub-hosted Apple gate that builds both the package and SwiftUI executable with warnings as errors and runs 41 Swift tests, the CLI fixture harness and the portable gates.
 
 ## Deliberate release blockers
 

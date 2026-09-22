@@ -31,7 +31,7 @@ The adapter is Apple-compiled and the policy boundary is Apple-tested. Signed St
 
 ## Verification snapshot
 
-Apple workflow run `35741703214` passed on macOS 15 arm64 with Apple Swift 6.1.2: warnings-as-errors package build, explicit SwiftUI executable build, 40 XCTest cases, CLI fixture replay and all portable gates. The authoritative result will be refreshed after the final documentation commit.
+Apple workflow run `35742751689` passed on macOS 15 arm64 with Apple Swift 6.1.2: warnings-as-errors package build, explicit SwiftUI executable build, 41 XCTest cases, CLI fixture replay and all portable gates. The authoritative result is recorded in `verification/apple-gate-results.json`.
 
 ## Still required before engine lock or submission
 
