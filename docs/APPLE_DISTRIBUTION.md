@@ -41,17 +41,15 @@ The local catalog is test data and does not upload to App Store Connect. An Acco
 
 ## StoreKit verification matrix
 
-The headless CI gate automates:
+The headless CI gate validates both product IDs, non-consumable types, US reference prices, the exact five-locale set and local-only catalogue settings. It also compiles the app-hosted Xcode lifecycle suite for:
 
-- both IDs loading as non-consumables at the local US reference prices;
 - Pro purchase and highest-tier Accountant upgrade;
 - entitlement recovery in a fresh service instance after an external purchase;
 - refund removing a non-consumable entitlement;
-- local product loading without an App Store network dependency.
+- Ask to Buy returning pending without unlocking;
+- interrupted purchase failing closed.
 
-The Xcode suite also contains Ask to Buy and interrupted-purchase scenarios for interactive execution. Those two dialog/stateful scenarios are deliberately excluded from the headless gate and remain part of the signed sandbox device pass.
-
-Before release, repeat in-app purchase, cancel, pending approval, `AppStore.sync()` restore, refund/revocation and offline relaunch with Sandbox Apple Accounts against the live product records. StoreKit changes can take time to appear in the sandbox, so record the product state and test timestamp rather than retrying blindly.
+StoreKit transaction execution is deliberately not claimed by the headless GitHub runner: Apple's simulator transaction service does not complete reliably there. Run the five compiled scenarios from Xcode, then repeat purchase, cancel, pending approval, `AppStore.sync()` restore, refund/revocation and offline relaunch with Sandbox Apple Accounts against the live product records on physical iPhone, iPad and Mac. Record the product state and test timestamp.
 
 ## Operator workflows delivered
 
