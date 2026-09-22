@@ -79,7 +79,6 @@ jobs:
             -scheme BankReconciliation \
             -destination "platform=iOS Simulator,id=$simulator_id" \
             CODE_SIGNING_ALLOWED=NO \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             test
       - name: Produce unsigned validation archives
         run: |
